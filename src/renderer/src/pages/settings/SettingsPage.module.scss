@@ -1,0 +1,357 @@
+/* Styles the two-column settings shell and reusable preference rows. */
+
+.shell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.menu {
+  height: 100%;
+  min-height: 0;
+  width: 218px;
+  flex: 0 0 218px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 10px;
+  border-right: 0.5px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-background-soft) 55%, var(--color-background));
+}
+
+.menuTitle {
+  padding: 4px 10px 9px;
+  color: var(--color-text-3);
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.menuItem {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border: 0.5px solid transparent;
+  border-radius: var(--list-item-radius);
+  color: var(--color-text-2);
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &.active {
+    color: var(--color-text-1);
+    background: var(--color-background-soft);
+  }
+
+  &.active {
+    border-color: var(--color-border);
+  }
+}
+
+.settingContainer {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 20px 24px 48px;
+}
+
+.groupTitle {
+  margin: 20px 4px 8px;
+  color: var(--color-text-3);
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.settingGroup {
+  margin-bottom: 16px;
+  padding: 4px 16px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--list-item-radius);
+  background: color-mix(in srgb, var(--color-background-soft) 36%, transparent);
+}
+
+.settingRow {
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 11px 0;
+
+  & + & {
+    border-top: 0.5px solid var(--color-border-soft);
+  }
+}
+
+.settingLabel {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+
+  strong {
+    color: var(--color-text-1);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  span {
+    color: var(--color-text-3);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+}
+
+.settingControl {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.segmentedOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.zoomControl {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.zoomValue {
+  width: 48px;
+  color: var(--color-text-1);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.compactControl {
+  width: 170px;
+}
+
+.durationControl {
+  width: 170px;
+}
+
+.durationInput {
+  width: 128px;
+}
+
+.durationUnit {
+  width: 42px;
+  color: var(--color-text-3);
+  text-align: center;
+  pointer-events: none;
+}
+
+.wideControl {
+  width: 250px;
+}
+
+.modelSelect {
+  :global(.ant-select-selector) {
+    min-height: 48px !important;
+    align-items: center;
+  }
+
+  :global(.ant-select-selection-item) {
+    line-height: normal !important;
+  }
+}
+
+.modelOption {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block: 3px;
+  line-height: 1.25;
+}
+
+.modelOptionName {
+  overflow: hidden;
+  color: var(--color-text-1);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelOptionPrice {
+  color: var(--color-text-3);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fullControl,
+.flexControl {
+  width: 100%;
+}
+
+.flexControl {
+  flex: 1;
+}
+
+.stackedRow {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.credentialRow {
+  align-items: center;
+}
+
+.apiKeyControl {
+  :global(.ant-tag) {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+  }
+}
+
+.apiCreditNotice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 10px 0 2px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--color-primary-soft);
+  border-radius: var(--list-item-radius);
+  color: var(--color-text-1);
+  background: var(--color-primary-mute);
+  font-size: 12px;
+
+  svg {
+    flex: 0 0 auto;
+    color: var(--color-primary);
+  }
+}
+
+.apiCreditLink {
+  flex: 0 0 auto;
+  padding-inline: 4px;
+}
+
+.authorLink {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  color: var(--color-primary);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.balanceValue {
+  flex: 0 0 auto;
+  color: var(--color-text-1);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.updateRow {
+  flex-wrap: wrap;
+
+  :global(.ant-progress) {
+    flex-basis: 100%;
+  }
+}
+
+.releaseNotes {
+  padding: 13px 0;
+  border-top: 0.5px solid var(--color-border-soft);
+
+  strong {
+    font-size: 12px;
+  }
+
+  pre {
+    max-height: 220px;
+    overflow: auto;
+    margin: 8px 0 0;
+    color: var(--color-text-2);
+    font: 11px/1.6 var(--font-family);
+    white-space: pre-wrap;
+    user-select: text;
+  }
+}
+
+.aboutHero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 0 28px;
+
+  img {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+  }
+
+  h2 {
+    margin: 10px 0 2px;
+    font-size: 18px;
+    font-weight: 650;
+  }
+
+  p {
+    margin: 0 0 10px;
+    color: var(--color-text-3);
+    font-size: 12px;
+  }
+}
+
+.statusTag {
+  :global(.ant-tag) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+  }
+}
+
+@media (max-width: 960px) {
+  .menu {
+    width: 184px;
+    flex-basis: 184px;
+  }
+
+  .settingContainer {
+    padding-inline: 18px;
+  }
+
+  .settingRow {
+    gap: 14px;
+  }
+
+  .wideControl {
+    width: 210px;
+  }
+}

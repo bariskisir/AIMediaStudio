@@ -1,0 +1,110 @@
+/* Styles equal-width microphone, speaker, speech-language, and translation controls. */
+
+.container {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(145px, 1fr)) auto;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 0.5px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.sourceBlock {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--list-item-radius);
+  background: transparent;
+  opacity: 0.62;
+
+  &.enabled {
+    background: var(--color-background-soft);
+    opacity: 1;
+  }
+
+  :global(.ant-select) {
+    width: 100%;
+  }
+}
+
+.sourceHeader {
+  min-width: 0;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.sourceIcon {
+  display: flex;
+}
+
+.microphoneTone {
+  color: var(--transcript-microphone);
+}
+
+.speakerTone {
+  color: var(--transcript-speaker);
+}
+
+.languageTone {
+  color: var(--color-primary);
+}
+
+.sourceName {
+  overflow: hidden;
+  color: var(--color-text-1);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.headerSpacer {
+  flex: 1;
+}
+
+.meter {
+  width: auto;
+  height: 3px;
+  min-width: 18px;
+  flex: 1;
+  overflow: hidden;
+  border: 0;
+  border-radius: 5px;
+  appearance: none;
+
+  &::-webkit-progress-bar {
+    border-radius: 5px;
+    background: var(--color-border);
+  }
+
+  &::-webkit-progress-value {
+    border-radius: 5px;
+    background: var(--color-primary);
+    transition: width 80ms linear;
+  }
+}
+
+.recordButton {
+  align-self: center;
+  height: 38px;
+  min-width: 142px;
+  border-radius: 9px;
+  font-weight: 620;
+}
+
+@media (max-width: 1180px) {
+  .container {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .recordButton {
+    width: 100%;
+  }
+}

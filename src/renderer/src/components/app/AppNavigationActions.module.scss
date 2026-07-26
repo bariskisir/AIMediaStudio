@@ -1,0 +1,30 @@
+/* Styles global actions consistently across the left and top navbar layouts. */
+
+.container {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.left {
+  width: 100%;
+  flex-direction: column;
+  margin-top: auto;
+}
+
+.top {
+  flex-direction: row;
+  gap: 6px;
+}
+
+.actionButton {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.top .actionButton {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}

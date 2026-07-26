@@ -1,0 +1,13 @@
+<!-- Defines the canonical scalable Transcript application logo. -->
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="110" fill="#4F46E5"/>
+  <rect x="104" y="226" width="22" height="60" rx="11" fill="#FFFFFF"/>
+  <rect x="142" y="186" width="22" height="140" rx="11" fill="#FFFFFF"/>
+  <rect x="180" y="146" width="22" height="220" rx="11" fill="#FFFFFF"/>
+  <rect x="218" y="206" width="22" height="100" rx="11" fill="#FFFFFF"/>
+  <rect x="272" y="171" width="136" height="18" rx="9" fill="#FFFFFF" opacity="0.85"/>
+  <rect x="272" y="209" width="104" height="18" rx="9" fill="#FFFFFF" opacity="0.85"/>
+  <rect x="272" y="247" width="124" height="18" rx="9" fill="#FFFFFF" opacity="0.85"/>
+  <rect x="272" y="285" width="88" height="18" rx="9" fill="#FFFFFF" opacity="0.85"/>
+  <rect x="272" y="323" width="112" height="18" rx="9" fill="#FFFFFF" opacity="0.85"/>
+</svg>

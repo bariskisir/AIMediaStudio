@@ -1,0 +1,61 @@
+/* Defines Transcript semantic color tokens for dark and light themes. */
+
+:root,
+body[theme-mode='dark'] {
+  --color-white: #ffffff;
+  --color-black: #181818;
+  --color-black-soft: #222222;
+  --color-black-mute: #333333;
+  --color-text-1: rgba(255, 255, 245, 0.92);
+  --color-text-2: rgba(235, 235, 245, 0.62);
+  --color-text-3: rgba(235, 235, 245, 0.38);
+  --color-background: #181818;
+  --color-background-soft: #222222;
+  --color-background-mute: #2b2b2b;
+  --color-primary: #756ef2;
+  --color-primary-soft: #756ef299;
+  --color-primary-mute: #756ef22b;
+  --color-icon: #ffffff99;
+  --color-border: #ffffff19;
+  --color-border-soft: #ffffff10;
+  --color-hover: #282828;
+  --color-active: #373737;
+  --color-error: #ff4d50;
+  --color-warning: #faad14;
+  --modal-background: #1b1b1b;
+  --navbar-background: #1f1f1f;
+  --list-item-radius: 10px;
+  --transcript-microphone: #56a8ff;
+  --transcript-speaker: #a78bfa;
+  --color-translation: #52c58b;
+  --color-translation-mute: #52c58b24;
+}
+
+body[theme-mode='light'] {
+  --color-white: #ffffff;
+  --color-black: #1b1b1f;
+  --color-black-soft: #262626;
+  --color-black-mute: #363636;
+  --color-text-1: rgba(0, 0, 0, 0.9);
+  --color-text-2: rgba(0, 0, 0, 0.6);
+  --color-text-3: rgba(0, 0, 0, 0.38);
+  --color-background: #ffffff;
+  --color-background-soft: #f5f5f5;
+  --color-background-mute: #ededed;
+  --color-primary: #4f46e5;
+  --color-primary-soft: #4f46e599;
+  --color-primary-mute: #4f46e520;
+  --color-icon: #00000099;
+  --color-border: #00000019;
+  --color-border-soft: #00000010;
+  --color-hover: #eeeeee;
+  --color-active: #e4e4e4;
+  --color-error: #e5484d;
+  --color-warning: #d89614;
+  --modal-background: #ffffff;
+  --navbar-background: #f4f4f4;
+  --transcript-microphone: #1677ff;
+  --transcript-speaker: #7c3aed;
+  --color-translation: #178a55;
+  --color-translation-mute: #178a551a;
+}

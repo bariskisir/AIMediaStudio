@@ -1,0 +1,7 @@
+# Keeps cross-platform source files deterministic while preserving binary application assets.
+* text=auto eol=lf
+
+*.ico binary
+*.png binary
+*.zip binary
+*.exe binary
