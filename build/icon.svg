@@ -1,13 +1,9 @@
-<!-- Defines the canonical scalable Transcript application logo. -->
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="512" height="512" rx="110" fill="#4F46E5"/>
-  <rect x="104" y="226" width="22" height="60" rx="11" fill="#FFFFFF"/>
-  <rect x="142" y="186" width="22" height="140" rx="11" fill="#FFFFFF"/>
-  <rect x="180" y="146" width="22" height="220" rx="11" fill="#FFFFFF"/>
-  <rect x="218" y="206" width="22" height="100" rx="11" fill="#FFFFFF"/>
-  <rect x="272" y="171" width="136" height="18" rx="9" fill="#FFFFFF" opacity="0.85"/>
-  <rect x="272" y="209" width="104" height="18" rx="9" fill="#FFFFFF" opacity="0.85"/>
-  <rect x="272" y="247" width="124" height="18" rx="9" fill="#FFFFFF" opacity="0.85"/>
-  <rect x="272" y="285" width="88" height="18" rx="9" fill="#FFFFFF" opacity="0.85"/>
-  <rect x="272" y="323" width="112" height="18" rx="9" fill="#FFFFFF" opacity="0.85"/>
+  <path d="M150 368 L298 220" stroke="#FFFFFF" stroke-width="46" stroke-linecap="round"/>
+  <path d="M221 275 L243 297" stroke="#4F46E5" stroke-width="11" stroke-linecap="round"/>
+  <path d="M245 251 L267 273" stroke="#4F46E5" stroke-width="11" stroke-linecap="round"/>
+  <path d="M344 112 C349 134, 376 161, 398 166 C376 171, 349 198, 344 220 C339 198, 312 171, 290 166 C312 161, 339 134, 344 112 Z" fill="#FFFFFF"/>
+  <path d="M416 78 C418 87, 429 98, 438 100 C429 102, 418 113, 416 122 C414 113, 403 102, 394 100 C403 98, 414 87, 416 78 Z" fill="#FFFFFF"/>
+  <path d="M404 221 C405 227, 413 235, 419 236 C413 237, 405 245, 404 251 C403 245, 395 237, 389 236 C395 235, 403 227, 404 221 Z" fill="#FFFFFF"/>
 </svg>

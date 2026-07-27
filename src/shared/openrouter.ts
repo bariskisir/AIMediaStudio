@@ -1,244 +1,129 @@
 /**
- * Defines renderer-safe OpenRouter speech model metadata and pricing normalization helpers.
+ * Defines OpenRouter media model contracts shared by all application processes.
  */
 
-export const OPENROUTER_CATALOG_URL = 'https://openrouter.ai/api/frontend/v1/catalog/models'
+export const OPENROUTER_PROVIDER = 'openrouter' as const
+export const OPENROUTER_IMAGE_MODELS_URL = 'https://openrouter.ai/api/v1/images/models'
+export const OPENROUTER_VIDEO_MODELS_URL = 'https://openrouter.ai/api/v1/videos/models'
+export const OPENROUTER_TTS_MODELS_URL =
+  'https://openrouter.ai/api/v1/models?output_modalities=speech'
+export const OPENROUTER_STT_MODELS_URL =
+  'https://openrouter.ai/api/v1/models?output_modalities=transcription'
+export const OPENROUTER_IMAGES_URL = 'https://openrouter.ai/api/v1/images'
+export const OPENROUTER_VIDEOS_URL = 'https://openrouter.ai/api/v1/videos'
+export const OPENROUTER_TTS_URL = 'https://openrouter.ai/api/v1/audio/speech'
+export const OPENROUTER_STT_URL = 'https://openrouter.ai/api/v1/audio/transcriptions'
+export const OPENROUTER_GENERATION_URL = 'https://openrouter.ai/api/v1/generation'
 export const OPENROUTER_KEYS_URL = 'https://openrouter.ai/settings/keys'
 
-/** Common transcription languages pinned ahead of the alphabetical ISO list. */
-export const OPENROUTER_FEATURED_TRANSCRIPTION_LANGUAGES = [
-  'en',
-  'tr',
-  'es',
-  'zh',
-  'hi',
-  'ar',
-  'pt',
-  'fr',
-  'de',
-  'ru',
-  'ja',
-  'ko',
-  'id',
-  'it',
-  'nl',
-  'pl',
-  'uk',
-  'vi',
-  'th',
-  'fa',
-] as const
+export const IMAGE_OUTPUT_FORMATS = ['png', 'jpeg', 'webp', 'svg'] as const
+export const IMAGE_QUALITIES = ['auto', 'low', 'medium', 'high'] as const
+export const IMAGE_BACKGROUNDS = ['auto', 'transparent', 'opaque'] as const
+export const TTS_OUTPUT_FORMATS = ['mp3', 'pcm'] as const
+export const AUDIO_INPUT_FORMATS = ['wav', 'mp3', 'flac', 'm4a', 'ogg', 'webm', 'aac'] as const
+export const MEDIA_KINDS = ['image', 'video', 'tts', 'stt'] as const
 
-/** ISO 639-1 language codes accepted by OpenRouter's optional STT language parameter. */
-export const OPENROUTER_TRANSCRIPTION_LANGUAGES = [
-  'aa',
-  'ab',
-  'ae',
-  'af',
-  'ak',
-  'am',
-  'an',
-  'ar',
-  'as',
-  'av',
-  'ay',
-  'az',
-  'ba',
-  'be',
-  'bg',
-  'bh',
-  'bi',
-  'bm',
-  'bn',
-  'bo',
-  'br',
-  'bs',
-  'ca',
-  'ce',
-  'ch',
-  'co',
-  'cr',
-  'cs',
-  'cu',
-  'cv',
-  'cy',
-  'da',
-  'de',
-  'dv',
-  'dz',
-  'ee',
-  'el',
-  'en',
-  'eo',
-  'es',
-  'et',
-  'eu',
-  'fa',
-  'ff',
-  'fi',
-  'fj',
-  'fo',
-  'fr',
-  'fy',
-  'ga',
-  'gd',
-  'gl',
-  'gn',
-  'gu',
-  'gv',
-  'ha',
-  'he',
-  'hi',
-  'ho',
-  'hr',
-  'ht',
-  'hu',
-  'hy',
-  'hz',
-  'ia',
-  'id',
-  'ie',
-  'ig',
-  'ii',
-  'ik',
-  'io',
-  'is',
-  'it',
-  'iu',
-  'ja',
-  'jv',
-  'ka',
-  'kg',
-  'ki',
-  'kj',
-  'kk',
-  'kl',
-  'km',
-  'kn',
-  'ko',
-  'kr',
-  'ks',
-  'ku',
-  'kv',
-  'kw',
-  'ky',
-  'la',
-  'lb',
-  'lg',
-  'li',
-  'ln',
-  'lo',
-  'lt',
-  'lu',
-  'lv',
-  'mg',
-  'mh',
-  'mi',
-  'mk',
-  'ml',
-  'mn',
-  'mr',
-  'ms',
-  'mt',
-  'my',
-  'na',
-  'nb',
-  'nd',
-  'ne',
-  'ng',
-  'nl',
-  'nn',
-  'no',
-  'nr',
-  'nv',
-  'ny',
-  'oc',
-  'oj',
-  'om',
-  'or',
-  'os',
-  'pa',
-  'pi',
-  'pl',
-  'ps',
-  'pt',
-  'qu',
-  'rm',
-  'rn',
-  'ro',
-  'ru',
-  'rw',
-  'sa',
-  'sc',
-  'sd',
-  'se',
-  'sg',
-  'si',
-  'sk',
-  'sl',
-  'sm',
-  'sn',
-  'so',
-  'sq',
-  'sr',
-  'ss',
-  'st',
-  'su',
-  'sv',
-  'sw',
-  'ta',
-  'te',
-  'tg',
-  'th',
-  'ti',
-  'tk',
-  'tl',
-  'tn',
-  'to',
-  'tr',
-  'ts',
-  'tt',
-  'tw',
-  'ty',
-  'ug',
-  'uk',
-  'ur',
-  'uz',
-  've',
-  'vi',
-  'vo',
-  'wa',
-  'wo',
-  'xh',
-  'yi',
-  'yo',
-  'za',
-  'zh',
-  'zu',
-] as const
+export type OpenRouterProvider = typeof OPENROUTER_PROVIDER
+export type ImageOutputFormat = (typeof IMAGE_OUTPUT_FORMATS)[number]
+export type ImageQuality = (typeof IMAGE_QUALITIES)[number]
+export type ImageBackground = (typeof IMAGE_BACKGROUNDS)[number]
+export type TtsOutputFormat = (typeof TTS_OUTPUT_FORMATS)[number]
+export type AudioInputFormat = (typeof AUDIO_INPUT_FORMATS)[number]
+export type MediaKind = (typeof MEDIA_KINDS)[number]
 
-const featuredTranscriptionLanguages = new Set<string>(OPENROUTER_FEATURED_TRANSCRIPTION_LANGUAGES)
+/** Describes one typed request capability reported by OpenRouter. */
+export type CapabilityDescriptor =
+  | { type: 'enum'; values: string[] }
+  | { type: 'range'; min: number; max: number }
+  | { type: 'boolean' }
 
-/** Complete OpenRouter language order used consistently by every renderer dropdown. */
-export const ORDERED_OPENROUTER_TRANSCRIPTION_LANGUAGES = [
-  ...OPENROUTER_FEATURED_TRANSCRIPTION_LANGUAGES,
-  ...OPENROUTER_TRANSCRIPTION_LANGUAGES.filter(
-    (language) => !featuredTranscriptionLanguages.has(language),
-  ),
-]
-
-/** Renderer-safe metadata for one duration-priced OpenRouter STT model. */
-export interface OpenRouterSpeechModel {
-  id: string
-  name: string
-  hourlyPriceUsd: number
+/** Preserves exact provider pricing without estimating across incompatible billing units. */
+export interface ModelPrice {
+  amountUsd: number
+  unit: string
+  billable: string
+  variant?: string
 }
 
-/** Converts a duration price into its hourly USD equivalent. */
-export const toHourlyPriceUsd = (price: number, unitLabel: string): number | null => {
-  if (!Number.isFinite(price) || price < 0) return null
-  if (unitLabel === '/second') return price * 3_600
-  if (unitLabel === '/minute') return price * 60
-  if (unitLabel === '/hour') return price
-  return null
+/** Normalizes media discovery records for renderer selection controls. */
+export interface MediaModel {
+  id: string
+  name: string
+  description: string
+  kind: MediaKind
+  capabilities: Record<string, CapabilityDescriptor>
+  prices: ModelPrice[]
+  supportsStreaming: boolean
+  supportedResolutions: string[]
+  supportedAspectRatios: string[]
+  supportedSizes: string[]
+  supportedDurations: number[]
+  supportedFrameImages: Array<'first_frame' | 'last_frame'>
+  supportsAudio: boolean
+  supportedVoices: string[]
+  supportsCustomVoice: boolean
+}
+
+/** Returns the preferred native output price and then the cheapest price within that unit. */
+export const getDisplayPrice = (model: MediaModel): ModelPrice | null =>
+  [...model.prices].sort((left, right) => {
+    const priorityDifference =
+      getModelPriceUnitPriority(model.kind, left) - getModelPriceUnitPriority(model.kind, right)
+    if (priorityDifference !== 0) return priorityDifference
+    return getComparablePriceAmount(left) - getComparablePriceAmount(right)
+  })[0] ?? null
+
+/** Converts token-based prices to a comparable USD-per-million-token amount. */
+export const getComparablePriceAmount = (price: ModelPrice): number =>
+  isTokenPrice(price) || isCharacterPrice(price) ? price.amountUsd * 1_000_000 : price.amountUsd
+
+/** Detects token and provider-specific media-token billing units. */
+export const isTokenPrice = (price: ModelPrice): boolean =>
+  price.unit.toLocaleLowerCase('en-US').includes('token')
+
+/** Detects TTS input pricing that is easier to compare per one million characters. */
+export const isCharacterPrice = (price: ModelPrice): boolean =>
+  price.unit.toLocaleLowerCase('en-US').includes('character')
+
+/** Estimates TTS input cost from the character price exposed by the live model catalog. */
+export const estimateTtsCost = (model: MediaModel, input: string): number | null => {
+  const characterPrice = model.prices
+    .filter((price) => price.billable === 'input_character' && isCharacterPrice(price))
+    .sort((left, right) => left.amountUsd - right.amountUsd)[0]
+  return characterPrice ? characterPrice.amountUsd * Array.from(input).length : null
+}
+
+/** Prioritizes native media output units before secondary and input-only billing units. */
+export const getModelPriceUnitPriority = (kind: MediaKind, price: ModelPrice): number => {
+  const unit = price.unit.trim().toLocaleLowerCase('en-US')
+  if (kind === 'tts') {
+    if (price.billable === 'input_character' && isCharacterPrice(price)) return 0
+    if (isTokenPrice(price)) return 1
+    return 3
+  }
+  if (kind === 'stt') {
+    if (
+      price.billable === 'input_audio' &&
+      (unit === 'hour' ||
+        unit === 'hours' ||
+        unit === 'minute' ||
+        unit === 'minutes' ||
+        unit === 'second' ||
+        unit === 'seconds')
+    ) {
+      return 0
+    }
+    if (isTokenPrice(price)) return 1
+    return 3
+  }
+  const expectedBillable = kind === 'image' ? 'output_image' : 'output_video'
+  if (price.billable === expectedBillable) {
+    if (kind === 'image' && (unit === 'image' || unit === 'images')) return 0
+    if (kind === 'video' && (unit === 'second' || unit === 'seconds')) return 0
+    if (kind === 'image' && (unit === 'megapixel' || unit === 'megapixels')) return 1
+    if (isTokenPrice(price)) return kind === 'image' ? 2 : 1
+    return 3
+  }
+  if (price.billable.startsWith('output_')) return 4
+  return 5
 }

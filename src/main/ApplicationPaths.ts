@@ -16,7 +16,7 @@ export interface ApplicationPaths {
 
 /** Configures Electron paths before ready so Chromium files stay outside durable app data. */
 export const configureApplicationPaths = (): ApplicationPaths => {
-  const applicationDataRoot = join(app.getPath('appData'), 'Transcript')
+  const applicationDataRoot = join(app.getPath('appData'), 'AIMediaStudio')
   const dataRoot = join(applicationDataRoot, 'Data')
   const logsRoot = join(applicationDataRoot, 'Logs')
   const runtimeRoot = join(applicationDataRoot, 'Runtime')

@@ -1,19 +1,14 @@
 /**
- * Centralizes persisted and IPC settings validation, including migrations from earlier schemas.
+ * Validates persisted and IPC settings for all OpenRouter media workflows.
  */
 
 import {
-  canonicalizeDeepgramModel,
-  DEEPGRAM_DIARIZATION_MODES,
-  DEEPGRAM_REDACTION_MODES,
-} from '@shared/deepgram'
-import {
-  DEFAULT_DEEPGRAM_TRANSCRIPTION_SETTINGS,
-  DEFAULT_OPENROUTER_TRANSCRIPTION_SETTINGS,
-  REST_TRANSCRIPTION_SPEEDS,
-  TRANSCRIPTION_PROVIDERS,
-} from '@shared/transcription'
-import { TRANSLATION_PROVIDERS, TRANSLATION_TARGET_LANGUAGES } from '@shared/translation'
+  IMAGE_BACKGROUNDS,
+  IMAGE_OUTPUT_FORMATS,
+  IMAGE_QUALITIES,
+  MEDIA_KINDS,
+  TTS_OUTPUT_FORMATS,
+} from '@shared/openrouter'
 import {
   APP_LOCALES,
   DEFAULT_SETTINGS,
@@ -22,39 +17,51 @@ import {
   PAGE_ZOOM_LIMITS,
   TIME_FORMATS,
   THEME_MODES,
+  WORKSPACE_INPUT_PERCENT_LIMITS,
   type AppSettings,
 } from '@shared/types'
 import { z } from 'zod'
 
-const deepgramSettingsFieldsSchema = z.object({
-  language: z.string().min(1).max(24),
-  model: z.string().trim().min(1).max(200),
-  modelVersion: z.string().trim().min(1).max(80),
-  punctuate: z.boolean(),
-  smartFormat: z.boolean(),
-  numerals: z.boolean(),
-  profanityFilter: z.boolean(),
-  diarization: z.enum(DEEPGRAM_DIARIZATION_MODES),
-  redaction: z.enum(DEEPGRAM_REDACTION_MODES),
-  endpointingMs: z.number().int().min(10).max(5_000),
-  utteranceEndEnabled: z.boolean(),
-  utteranceEndMs: z.number().int().min(1_000).max(5_000),
-  vocabulary: z.array(z.string().trim().min(1).max(120)).max(100),
-  mipOptOut: z.boolean(),
+const nullableSeedSchema = z.number().int().min(0).max(2_147_483_647).nullable()
+
+const imageProviderSettingsSchema = z.object({
+  modelId: z.string().trim().max(200),
+  resolution: z.string().trim().min(1).max(32),
+  aspectRatio: z.string().trim().min(1).max(32),
+  quality: z.enum(IMAGE_QUALITIES),
+  outputFormat: z.enum(IMAGE_OUTPUT_FORMATS),
+  count: z.number().int().min(1).max(10),
+  background: z.enum(IMAGE_BACKGROUNDS),
+  outputCompression: z.number().int().min(0).max(100),
+  seed: nullableSeedSchema,
 })
 
-const openRouterSettingsFieldsSchema = z.object({
-  model: z.string().trim().min(1).max(200),
-  language: z.string().regex(/^(?:|[a-z]{2})$/),
-  speed: z.enum(REST_TRANSCRIPTION_SPEEDS),
+const videoProviderSettingsSchema = z.object({
+  modelId: z.string().trim().max(200),
+  duration: z.number().int().min(1).max(120),
+  resolution: z.string().trim().min(1).max(32),
+  aspectRatio: z.string().trim().min(1).max(32),
+  size: z.string().trim().max(32),
+  generateAudio: z.boolean(),
+  seed: nullableSeedSchema,
 })
 
-const transcriptionProviderSettingsSchema = z
-  .object({
-    deepgram: deepgramSettingsFieldsSchema,
-    openrouter: openRouterSettingsFieldsSchema,
-  })
-  .strict()
+const ttsProviderSettingsSchema = z.object({
+  modelId: z.string().trim().max(200),
+  voice: z.string().trim().max(200),
+  responseFormat: z.enum(TTS_OUTPUT_FORMATS),
+  speed: z.number().min(0.25).max(4),
+})
+
+const sttProviderSettingsSchema = z.object({
+  modelId: z.string().trim().max(200),
+  language: z
+    .string()
+    .trim()
+    .regex(/^$|^[a-z]{2,3}(?:-[A-Z]{2})?$/)
+    .max(12),
+  temperature: z.number().min(0).max(1),
+})
 
 const settingsFieldsSchema = z.object({
   settingsRevision: z.literal(1),
@@ -62,16 +69,28 @@ const settingsFieldsSchema = z.object({
   theme: z.enum(THEME_MODES),
   navbarPosition: z.enum(NAVBAR_POSITIONS),
   pageZoom: z.number().min(PAGE_ZOOM_LIMITS.min).max(PAGE_ZOOM_LIMITS.max),
+  workspaceInputPercent: z
+    .number()
+    .min(WORKSPACE_INPUT_PERCENT_LIMITS.min)
+    .max(WORKSPACE_INPUT_PERCENT_LIMITS.max),
   timeFormat: z.enum(TIME_FORMATS),
-  transcriptionProvider: z.enum(TRANSCRIPTION_PROVIDERS),
-  transcriptionProviderSettings: transcriptionProviderSettingsSchema,
-  translationProvider: z.enum(TRANSLATION_PROVIDERS),
-  translationEnabled: z.boolean(),
-  translationTargetLanguage: z.enum(TRANSLATION_TARGET_LANGUAGES),
-  microphoneDeviceId: z.string().max(512),
-  microphoneEnabled: z.boolean(),
-  speakerDeviceId: z.string().max(512),
-  speakerEnabled: z.boolean(),
+  generationMode: z.enum(MEDIA_KINDS),
+  image: z.object({
+    provider: z.literal('openrouter'),
+    providers: z.object({ openrouter: imageProviderSettingsSchema }),
+  }),
+  video: z.object({
+    provider: z.literal('openrouter'),
+    providers: z.object({ openrouter: videoProviderSettingsSchema }),
+  }),
+  tts: z.object({
+    provider: z.literal('openrouter'),
+    providers: z.object({ openrouter: ttsProviderSettingsSchema }),
+  }),
+  stt: z.object({
+    provider: z.literal('openrouter'),
+    providers: z.object({ openrouter: sttProviderSettingsSchema }),
+  }),
   alwaysOnTop: z.boolean(),
   showTrayIcon: z.boolean(),
   minimizeToTrayOnClose: z.boolean(),
@@ -79,6 +98,7 @@ const settingsFieldsSchema = z.object({
   logLevel: z.enum(LOG_LEVELS),
 })
 
+/** Validates a complete settings document and dependent tray preferences. */
 export const settingsSchema = settingsFieldsSchema.superRefine((settings, context) => {
   if (settings.minimizeToTrayOnClose && !settings.showTrayIcon) {
     context.addIssue({
@@ -87,138 +107,120 @@ export const settingsSchema = settingsFieldsSchema.superRefine((settings, contex
       message: 'Minimize to tray requires the tray icon to be enabled.',
     })
   }
-  const deepgram = settings.transcriptionProviderSettings.deepgram
-  if (deepgram.redaction !== 'none' && !deepgram.language.startsWith('en')) {
-    context.addIssue({
-      code: 'custom',
-      path: ['transcriptionProviderSettings', 'deepgram', 'redaction'],
-      message: 'Deepgram streaming redaction is available for English audio only.',
-    })
-  }
 })
 
-const deepgramSettingsPatchSchema = deepgramSettingsFieldsSchema
-  .partial()
-  .strict()
-  .refine(
-    (patch) => Object.keys(patch).length > 0,
-    'At least one Deepgram setting must be provided.',
-  )
-
-const openRouterSettingsPatchSchema = openRouterSettingsFieldsSchema
-  .partial()
-  .strict()
-  .refine(
-    (patch) => Object.keys(patch).length > 0,
-    'At least one OpenRouter setting must be provided.',
-  )
-
-const transcriptionProviderSettingsPatchSchema = z
-  .object({
-    deepgram: deepgramSettingsPatchSchema.optional(),
-    openrouter: openRouterSettingsPatchSchema.optional(),
-  })
-  .strict()
-  .refine(
-    (patch) => Object.keys(patch).length > 0,
-    'At least one provider setting must be provided.',
-  )
-
+/** Validates a sparse provider-aware settings update. */
 export const settingsPatchSchema = settingsFieldsSchema
-  .omit({ settingsRevision: true, transcriptionProviderSettings: true })
+  .omit({ settingsRevision: true, image: true, video: true, tts: true, stt: true })
   .partial()
   .extend({
-    transcriptionProviderSettings: transcriptionProviderSettingsPatchSchema.optional(),
+    image: z
+      .object({
+        provider: z.literal('openrouter').optional(),
+        providers: z
+          .object({ openrouter: imageProviderSettingsSchema.partial().optional() })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    video: z
+      .object({
+        provider: z.literal('openrouter').optional(),
+        providers: z
+          .object({ openrouter: videoProviderSettingsSchema.partial().optional() })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    tts: z
+      .object({
+        provider: z.literal('openrouter').optional(),
+        providers: z
+          .object({ openrouter: ttsProviderSettingsSchema.partial().optional() })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    stt: z
+      .object({
+        provider: z.literal('openrouter').optional(),
+        providers: z
+          .object({ openrouter: sttProviderSettingsSchema.partial().optional() })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .refine((patch) => Object.keys(patch).length > 0, 'At least one setting must be provided.')
 
-/** Returns an object record only when a persisted value can contain named settings. */
+/** Returns named persisted fields only for plain object inputs. */
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
 
-/** Migrates a previously persisted settings object and applies new defaults safely. */
+/** Parses only complete AI Media Studio media settings and otherwise returns safe defaults. */
 export const parsePersistedSettings = (input: unknown): AppSettings => {
-  const legacy = asRecord(input)
-  if (!legacy) return structuredClone(DEFAULT_SETTINGS)
-
-  const persistedProviderSettings = asRecord(legacy.transcriptionProviderSettings)
-  const persistedDeepgram = asRecord(persistedProviderSettings?.deepgram)
-  const persistedOpenRouter = asRecord(persistedProviderSettings?.openrouter)
-  const deepgramSource = persistedDeepgram ?? legacy
-  const deepgramCandidate = {
-    ...DEFAULT_DEEPGRAM_TRANSCRIPTION_SETTINGS,
-    ...deepgramSource,
-    endpointingMs:
-      typeof deepgramSource.endpointingMs === 'number' &&
-      (persistedDeepgram !== null ||
-        legacy.settingsRevision === 2 ||
-        legacy.settingsRevision === 3 ||
-        legacy.settingsRevision === 4 ||
-        legacy.settingsRevision === 5 ||
-        legacy.settingsRevision === 6)
-        ? deepgramSource.endpointingMs
-        : DEFAULT_DEEPGRAM_TRANSCRIPTION_SETTINGS.endpointingMs,
+  const source = asRecord(input)
+  const image = asRecord(source?.image)
+  const video = asRecord(source?.video)
+  if (source?.settingsRevision !== 1 || !image || !video) {
+    return structuredClone(DEFAULT_SETTINGS)
   }
-  const model = canonicalizeDeepgramModel(String(deepgramCandidate.model))
-  const language = String(deepgramCandidate.language)
-  const openRouterCandidate = {
-    ...DEFAULT_OPENROUTER_TRANSCRIPTION_SETTINGS,
-    ...persistedOpenRouter,
-  }
-  const transcriptionProvider =
-    TRANSCRIPTION_PROVIDERS.find((provider) => provider === legacy.transcriptionProvider) ??
-    DEFAULT_SETTINGS.transcriptionProvider
-  const translationTargetLanguage = TRANSLATION_TARGET_LANGUAGES.find(
-    (targetLanguage) => targetLanguage === legacy.translationTargetLanguage,
-  )
-  const candidate = {
+  const imageProviders = asRecord(image.providers)
+  const videoProviders = asRecord(video.providers)
+  const tts = asRecord(source?.tts)
+  const stt = asRecord(source?.stt)
+  const ttsProviders = asRecord(tts?.providers)
+  const sttProviders = asRecord(stt?.providers)
+  const parsed = settingsSchema.safeParse({
     ...DEFAULT_SETTINGS,
-    ...legacy,
-    settingsRevision: 1 as const,
-    transcriptionProvider,
-    transcriptionProviderSettings: {
-      deepgram: {
-        ...deepgramCandidate,
-        model,
-        language,
-        ...(language.startsWith('en') ? {} : { redaction: 'none' as const }),
+    ...source,
+    image: {
+      ...DEFAULT_SETTINGS.image,
+      ...image,
+      providers: {
+        openrouter: {
+          ...DEFAULT_SETTINGS.image.providers.openrouter,
+          ...(asRecord(imageProviders?.openrouter) ?? {}),
+        },
       },
-      openrouter: openRouterCandidate,
     },
-    translationEnabled:
-      typeof legacy.translationEnabled === 'boolean'
-        ? legacy.translationEnabled
-        : translationTargetLanguage !== undefined,
-    translationTargetLanguage:
-      translationTargetLanguage ?? DEFAULT_SETTINGS.translationTargetLanguage,
-    speakerDeviceId:
-      typeof legacy.speakerDeviceId === 'string' ? legacy.speakerDeviceId : 'default',
-    speakerEnabled:
-      typeof legacy.speakerEnabled === 'boolean'
-        ? legacy.speakerEnabled
-        : typeof legacy.systemAudioEnabled === 'boolean'
-          ? legacy.systemAudioEnabled
-          : DEFAULT_SETTINGS.speakerEnabled,
-  }
-  const parsed = settingsSchema.safeParse(candidate)
-  if (parsed.success) return parsed.data
-
-  return settingsSchema.parse({
-    ...DEFAULT_SETTINGS,
-    uiLanguage: APP_LOCALES.includes(candidate.uiLanguage)
-      ? candidate.uiLanguage
-      : DEFAULT_SETTINGS.uiLanguage,
-    theme: THEME_MODES.includes(candidate.theme) ? candidate.theme : DEFAULT_SETTINGS.theme,
-    transcriptionProviderSettings: {
-      deepgram: {
-        ...DEFAULT_DEEPGRAM_TRANSCRIPTION_SETTINGS,
-        model: DEFAULT_DEEPGRAM_TRANSCRIPTION_SETTINGS.model,
-        language: DEFAULT_DEEPGRAM_TRANSCRIPTION_SETTINGS.language,
+    video: {
+      ...DEFAULT_SETTINGS.video,
+      ...video,
+      providers: {
+        openrouter: {
+          ...DEFAULT_SETTINGS.video.providers.openrouter,
+          ...(asRecord(videoProviders?.openrouter) ?? {}),
+        },
       },
-      openrouter: DEFAULT_OPENROUTER_TRANSCRIPTION_SETTINGS,
+    },
+    tts: {
+      ...DEFAULT_SETTINGS.tts,
+      ...(tts ?? {}),
+      providers: {
+        openrouter: {
+          ...DEFAULT_SETTINGS.tts.providers.openrouter,
+          ...(asRecord(ttsProviders?.openrouter) ?? {}),
+        },
+      },
+    },
+    stt: {
+      ...DEFAULT_SETTINGS.stt,
+      ...(stt ?? {}),
+      providers: {
+        openrouter: {
+          ...DEFAULT_SETTINGS.stt.providers.openrouter,
+          ...(asRecord(sttProviders?.openrouter) ?? {}),
+        },
+      },
     },
   })
+  return parsed.success ? parsed.data : structuredClone(DEFAULT_SETTINGS)
 }

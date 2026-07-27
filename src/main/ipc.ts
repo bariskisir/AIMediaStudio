@@ -1,56 +1,118 @@
 /**
- * Defines the validated IPC boundary between the renderer and main-process services.
+ * Defines the validated IPC boundary between the renderer and media-generation services.
  */
 
-import { writeFile } from 'node:fs/promises'
-import { app, dialog, ipcMain, shell, type BrowserWindow, type WebContents } from 'electron'
+import { copyFile, writeFile } from 'node:fs/promises'
+import { basename } from 'node:path'
+import {
+  app,
+  clipboard,
+  dialog,
+  ipcMain,
+  shell,
+  type BrowserWindow,
+  type WebContents,
+} from 'electron'
 import { IpcChannel } from '@shared/IpcChannel'
 import { APP_AUTHOR_URL } from '@shared/appInfo'
-import { TRANSLATION_PROVIDERS, TRANSLATION_TARGET_LANGUAGES } from '@shared/translation'
-import { TRANSCRIPTION_PROVIDERS, type TranscriptionProvider } from '@shared/transcription'
+import { MEDIA_KINDS } from '@shared/openrouter'
 import {
-  AUDIO_SOURCES,
   LOG_LEVELS,
-  SESSION_FORMATS,
-  type StartSessionRequest,
+  type GenerateRequest,
+  type MediaKind,
   type UpdateStateEvent,
 } from '@shared/types'
 import { z } from 'zod'
-import { settingsPatchSchema, settingsSchema } from './settingsSchema'
+import { settingsPatchSchema } from './settingsSchema'
 import type AppUpdater from './services/AppUpdater'
+import type AudioInputService from './services/AudioInputService'
 import type CredentialService from './services/CredentialService'
-import type DeepgramAccountService from './services/DeepgramAccountService'
-import type DeepgramCatalogService from './services/DeepgramCatalogService'
-import { reconcileDeepgramSettings } from './services/DeepgramCatalogService'
-import { renderSession } from './services/ExportService'
+import { saveApiKeyAndFillEmptyScopes } from './services/CredentialService'
+import { renderSessionMetadata } from './services/ExportService'
+import type GenerationService from './services/GenerationService'
 import type LoggerService from './services/LoggerService'
+import type MediaAssetService from './services/MediaAssetService'
 import type OpenRouterAccountService from './services/OpenRouterAccountService'
 import type OpenRouterCatalogService from './services/OpenRouterCatalogService'
+import type ReferenceImageService from './services/ReferenceImageService'
 import type StorageService from './services/StorageService'
-import type TranscriptService from './services/TranscriptService'
 import type TrayService from './services/TrayService'
 
-const startSchema = z.object({
-  settings: settingsSchema,
-  transcriptId: z.uuid().optional(),
-  title: z.string().trim().min(1).max(200).optional(),
-})
-const audioSchema = z.object({
-  source: z.enum(AUDIO_SOURCES),
-  samples: z.instanceof(Uint8Array).refine((value) => value.byteLength <= 256_000),
-})
-const transcriptIdSchema = z.uuid()
-const transcriptLanguageSchema = z.string().trim().min(1).max(24)
-const transcriptRenameSchema = z.object({
-  id: z.uuid(),
-  title: z.string().trim().min(1).max(200),
-})
-const formatSchema = z.enum(SESSION_FORMATS)
-const dialogTitleSchema = z.string().trim().min(1).max(120)
-const translationProviderSchema = z.enum(TRANSLATION_PROVIDERS)
-const translationTargetSchema = z.enum(TRANSLATION_TARGET_LANGUAGES)
+const mediaKindSchema = z.enum(MEDIA_KINDS)
+const credentialScopeSchema = z.object({ kind: mediaKindSchema, provider: z.literal('openrouter') })
 const apiKeySchema = z.string().trim().min(20).max(512)
-const transcriptionProviderSchema = z.enum(TRANSCRIPTION_PROVIDERS)
+const idSchema = z.uuid()
+const renameSchema = z.object({ id: idSchema, title: z.string().trim().min(1).max(200) })
+const assetSchema = z.object({ sessionId: idSchema, assetId: idSchema })
+const referenceRoleSchema = z.enum(['reference', 'first_frame', 'last_frame'])
+const visualKindSchema = z.enum(['image', 'video'])
+const generationSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('image'),
+    prompt: z.string().trim().min(1).max(20_000),
+    modelId: z.string().trim().min(1).max(200),
+    options: z.object({
+      resolution: z.string().max(32).optional(),
+      aspectRatio: z.string().max(32).optional(),
+      quality: z.enum(['auto', 'low', 'medium', 'high']).optional(),
+      outputFormat: z.enum(['png', 'jpeg', 'webp', 'svg']).optional(),
+      count: z.number().int().min(1).max(10).optional(),
+      background: z.enum(['auto', 'transparent', 'opaque']).optional(),
+      outputCompression: z.number().int().min(0).max(100).optional(),
+      seed: z.number().int().min(0).max(2_147_483_647).optional(),
+    }),
+    references: z.array(z.object({ token: idSchema, role: referenceRoleSchema })).max(10),
+    sessionId: idSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal('video'),
+    prompt: z.string().trim().min(1).max(20_000),
+    modelId: z.string().trim().min(1).max(200),
+    options: z.object({
+      duration: z.number().int().min(1).max(120).optional(),
+      resolution: z.string().max(32).optional(),
+      aspectRatio: z.string().max(32).optional(),
+      size: z
+        .string()
+        .regex(/^\d+x\d+$/)
+        .max(32)
+        .optional(),
+      generateAudio: z.boolean().optional(),
+      seed: z.number().int().min(0).max(2_147_483_647).optional(),
+    }),
+    references: z.array(z.object({ token: idSchema, role: referenceRoleSchema })).max(2),
+    sessionId: idSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal('tts'),
+    prompt: z.string().trim().min(1).max(20_000),
+    modelId: z.string().trim().min(1).max(200),
+    options: z.object({
+      voice: z.string().trim().min(1).max(200),
+      responseFormat: z.enum(['mp3', 'pcm']),
+      speed: z.number().min(0.25).max(4),
+    }),
+    sessionId: idSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal('stt'),
+    modelId: z.string().trim().min(1).max(200),
+    options: z.object({
+      language: z
+        .string()
+        .trim()
+        .regex(/^[a-z]{2,3}(?:-[A-Z]{2})?$/)
+        .max(12)
+        .optional(),
+      temperature: z.number().min(0).max(1).optional(),
+    }),
+    audio: z.union([
+      z.object({ token: idSchema }).strict(),
+      z.object({ sourceSessionId: idSchema }).strict(),
+    ]),
+    sessionId: idSchema.optional(),
+  }),
+])
 const rendererLogSchema = z.object({
   level: z.enum(LOG_LEVELS),
   module: z.string().trim().min(1).max(100),
@@ -59,9 +121,6 @@ const rendererLogSchema = z.object({
 })
 
 const TRUSTED_EXTERNAL_ORIGINS = new Set([
-  'https://deepgram.com',
-  'https://console.deepgram.com',
-  'https://developers.deepgram.com',
   'https://openrouter.ai',
   'https://github.com',
   APP_AUTHOR_URL,
@@ -69,36 +128,34 @@ const TRUSTED_EXTERNAL_ORIGINS = new Set([
 
 interface IpcServices {
   storage: StorageService
-  credentials: Record<TranscriptionProvider, CredentialService>
-  deepgramAccount: DeepgramAccountService
-  deepgramCatalog: DeepgramCatalogService
-  openRouterAccount: OpenRouterAccountService
-  openRouterCatalog: OpenRouterCatalogService
-  transcript: TranscriptService
+  credentials: Record<MediaKind, CredentialService>
+  account: OpenRouterAccountService
+  catalog: OpenRouterCatalogService
+  references: ReferenceImageService
+  audioInputs: AudioInputService
+  assets: MediaAssetService
+  generation: GenerationService
   tray: TrayService
   updater: AppUpdater
   logger: LoggerService
 }
 
-/** Removes previous handlers before a replacement window is attached. */
+/** Removes prior handlers before a replacement macOS window is attached. */
 export const removeIpcHandlers = (): void => {
-  Object.values(IpcChannel).forEach((channel) => {
-    ipcMain.removeHandler(channel)
-  })
-  ipcMain.removeAllListeners(IpcChannel.AudioChunk)
+  for (const channel of Object.values(IpcChannel)) ipcMain.removeHandler(channel)
   ipcMain.removeAllListeners(IpcChannel.LogWrite)
 }
 
-/** Registers all renderer commands against explicit main-process services. */
+/** Registers validated commands against explicit main-process services. */
 export const registerIpc = (window: BrowserWindow, services: IpcServices): void => {
   removeIpcHandlers()
 
-  /** Rejects any IPC call not originating from the main renderer. */
+  /** Rejects calls that do not originate from the active application renderer. */
   const assertSender = (sender: WebContents): void => {
     if (sender.id !== window.webContents.id) throw new Error('Untrusted IPC sender.')
   }
 
-  /** Sends a typed event only while the window is alive. */
+  /** Sends one event only while the owning window remains available. */
   const send = <T>(channel: IpcChannel, payload: T): void => {
     if (!window.isDestroyed()) window.webContents.send(channel, payload)
   }
@@ -110,197 +167,174 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
   ipcMain.handle(IpcChannel.AppBootstrap, async (event) => {
     assertSender(event.sender)
     const [
-      loadedSettings,
-      initialSessions,
-      hasDeepgramApiKey,
-      hasOpenRouterApiKey,
-      deepgramModels,
-      openRouterModels,
+      settings,
+      imageKey,
+      videoKey,
+      ttsKey,
+      sttKey,
+      imageModels,
+      videoModels,
+      ttsModels,
+      sttModels,
     ] = await Promise.all([
       services.storage.loadSettings(),
-      services.storage.listSessions(),
-      services.credentials.deepgram.hasApiKey(),
-      services.credentials.openrouter.hasApiKey(),
-      services.deepgramCatalog.getModels(),
-      services.openRouterCatalog.getModels(),
+      services.credentials.image.hasApiKey(),
+      services.credentials.video.hasApiKey(),
+      services.credentials.tts.hasApiKey(),
+      services.credentials.stt.hasApiKey(),
+      services.catalog.getModels('image').catch(() => []),
+      services.catalog.getModels('video').catch(() => []),
+      services.catalog.getModels('tts').catch(() => []),
+      services.catalog.getModels('stt').catch(() => []),
     ])
-    const reconciledDeepgram = reconcileDeepgramSettings(
-      loadedSettings.transcriptionProviderSettings.deepgram,
-      deepgramModels,
-    )
-    const settings =
-      JSON.stringify(reconciledDeepgram) ===
-      JSON.stringify(loadedSettings.transcriptionProviderSettings.deepgram)
-        ? loadedSettings
-        : await services.storage.updateSettings({
-            transcriptionProviderSettings: { deepgram: reconciledDeepgram },
-          })
     window.webContents.setZoomFactor(settings.pageZoom)
-    if (initialSessions.length === 0) {
-      const providerSettings =
-        settings.transcriptionProviderSettings[settings.transcriptionProvider]
-      await services.storage.createSession(providerSettings.language || settings.uiLanguage)
-    }
-    const sessions =
-      initialSessions.length === 0 ? await services.storage.listSessions() : initialSessions
-    const firstSession = sessions[0]
-    if (!firstSession) throw new Error('Session workspace could not be initialized.')
-    const currentSession = await services.storage.getSession(firstSession.id)
+    let sessions = await services.storage.listSessions()
+    if (!sessions.length) await services.storage.createSession()
+    sessions = await services.storage.listSessions()
+    const first = sessions[0]
+    if (!first) throw new Error('Generation workspace could not be initialized.')
     return {
       settings,
       sessions,
-      currentSession,
-      hasApiKeys: { deepgram: hasDeepgramApiKey, openrouter: hasOpenRouterApiKey },
-      deepgramModels,
-      openRouterModels,
+      currentSession: await services.storage.getSession(first.id),
+      hasApiKeys: { image: imageKey, video: videoKey, tts: ttsKey, stt: sttKey },
+      models: { image: imageModels, video: videoModels, tts: ttsModels, stt: sttModels },
       platform: process.platform,
       version: app.getVersion(),
     }
   })
+
   ipcMain.handle(IpcChannel.SettingsSave, async (event, input: unknown) => {
     assertSender(event.sender)
-    const patch = settingsPatchSchema.parse(input)
-    const savedSettings = await services.storage.updateSettings(patch)
-    window.setAlwaysOnTop(savedSettings.alwaysOnTop)
-    window.webContents.setZoomFactor(savedSettings.pageZoom)
-    services.tray.applySettings(savedSettings)
-    services.logger.setLevel(savedSettings.logLevel)
-    return savedSettings
+    const settings = await services.storage.updateSettings(settingsPatchSchema.parse(input))
+    window.setAlwaysOnTop(settings.alwaysOnTop)
+    window.webContents.setZoomFactor(settings.pageZoom)
+    services.tray.applySettings(settings)
+    services.logger.setLevel(settings.logLevel)
+    return settings
   })
+
   ipcMain.handle(
     IpcChannel.CredentialsSave,
-    async (event, providerInput: unknown, input: unknown) => {
+    async (event, scopeInput: unknown, keyInput: unknown) => {
       assertSender(event.sender)
-      const provider = transcriptionProviderSchema.parse(providerInput)
-      const apiKey = apiKeySchema.parse(input)
-      const balance =
-        provider === 'deepgram'
-          ? await services.deepgramAccount.verifyAndGetBalance(apiKey)
-          : await services.openRouterAccount.verifyAndGetBalance(apiKey)
-      await services.credentials[provider].saveApiKey(apiKey)
-      return balance
+      const scope = credentialScopeSchema.parse(scopeInput)
+      const apiKey = apiKeySchema.parse(keyInput)
+      const balance = await services.account.verifyAndGetBalance(apiKey)
+      const updatedKinds = await saveApiKeyAndFillEmptyScopes(
+        services.credentials,
+        scope.kind,
+        apiKey,
+      )
+      return { balance, updatedKinds }
     },
   )
-  ipcMain.handle(IpcChannel.CredentialsGet, async (event, providerInput: unknown) => {
+  ipcMain.handle(IpcChannel.CredentialsGet, async (event, scopeInput: unknown) => {
     assertSender(event.sender)
-    return services.credentials[transcriptionProviderSchema.parse(providerInput)].getApiKey()
+    const scope = credentialScopeSchema.parse(scopeInput)
+    return services.credentials[scope.kind].getApiKey()
   })
-  ipcMain.handle(IpcChannel.CredentialsDelete, async (event, providerInput: unknown) => {
+  ipcMain.handle(IpcChannel.CredentialsDelete, async (event, scopeInput: unknown) => {
     assertSender(event.sender)
-    await services.credentials[transcriptionProviderSchema.parse(providerInput)].deleteApiKey()
+    const scope = credentialScopeSchema.parse(scopeInput)
+    await services.credentials[scope.kind].deleteApiKey()
   })
-  ipcMain.handle(IpcChannel.CredentialsBalance, async (event, providerInput: unknown) => {
+  ipcMain.handle(IpcChannel.CredentialsBalance, async (event, scopeInput: unknown) => {
     assertSender(event.sender)
-    const provider = transcriptionProviderSchema.parse(providerInput)
-    const apiKey = await services.credentials[provider].getApiKey()
-    if (!apiKey) return []
-    return provider === 'deepgram'
-      ? services.deepgramAccount.getBalance(apiKey)
-      : services.openRouterAccount.getBalance(apiKey)
+    const scope = credentialScopeSchema.parse(scopeInput)
+    const apiKey = await services.credentials[scope.kind].getApiKey()
+    return apiKey ? services.account.getBalance(apiKey) : []
   })
-  ipcMain.handle(IpcChannel.DeepgramModels, async (event) => {
+  ipcMain.handle(IpcChannel.ModelsGet, async (event, kindInput: unknown, refreshInput: unknown) => {
     assertSender(event.sender)
-    return services.deepgramCatalog.getModels()
+    return services.catalog.getModels(mediaKindSchema.parse(kindInput), Boolean(refreshInput))
   })
-  ipcMain.handle(IpcChannel.OpenRouterModels, async (event) => {
+  ipcMain.handle(IpcChannel.ReferencesSelect, async (event, kindInput: unknown) => {
     assertSender(event.sender)
-    return services.openRouterCatalog.getModels()
+    const kind = visualKindSchema.parse(kindInput)
+    const result = await dialog.showOpenDialog(window, {
+      title: kind === 'image' ? 'Select reference images' : 'Select frame images',
+      properties:
+        kind === 'image' ? ['openFile', 'multiSelections'] : ['openFile', 'multiSelections'],
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+    })
+    return result.canceled ? [] : services.references.registerPaths(result.filePaths, kind)
   })
-  ipcMain.handle(IpcChannel.SessionStart, async (event, input: unknown) => {
+  ipcMain.handle(IpcChannel.ReferencesRelease, (event, tokensInput: unknown) => {
     assertSender(event.sender)
-    const parsed = startSchema.parse(input)
-    const request: StartSessionRequest = {
-      settings: parsed.settings,
-      ...(parsed.transcriptId ? { transcriptId: parsed.transcriptId } : {}),
-      ...(parsed.title ? { title: parsed.title } : {}),
-    }
-    if (request.settings.speakerEnabled && process.platform !== 'win32') {
-      throw new Error('Speaker loopback capture is currently available on Windows only.')
-    }
-    return services.transcript.start(request)
+    services.references.release(z.array(idSchema).max(10).parse(tokensInput))
   })
-  ipcMain.handle(IpcChannel.SessionStop, async (event) => {
+  ipcMain.handle(IpcChannel.AudioInputSelect, async (event) => {
     assertSender(event.sender)
-    return services.transcript.stop()
+    const result = await dialog.showOpenDialog(window, {
+      title: 'Select audio to transcribe',
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'flac', 'm4a', 'ogg', 'webm', 'aac'] }],
+    })
+    const path = result.filePaths[0]
+    return result.canceled || !path ? null : services.audioInputs.registerPath(path)
   })
-  ipcMain.on(IpcChannel.AudioChunk, (event, input: unknown) => {
+  ipcMain.handle(IpcChannel.AudioInputRelease, (event, tokenInput: unknown) => {
     assertSender(event.sender)
-    const parsed = audioSchema.safeParse(input)
-    if (parsed.success && parsed.data.samples.byteLength > 0) {
-      services.transcript.sendAudio(parsed.data.source, parsed.data.samples)
-    }
+    services.audioInputs.release(idSchema.parse(tokenInput))
   })
-  ipcMain.handle(IpcChannel.SessionCreate, async (event, input: unknown) => {
+  ipcMain.handle(IpcChannel.GenerationStart, async (event, input: unknown) => {
     assertSender(event.sender)
-    return services.storage.createSession(transcriptLanguageSchema.parse(input))
+    return services.generation.generate(generationSchema.parse(input) as GenerateRequest)
+  })
+  ipcMain.handle(IpcChannel.SessionCreate, async (event) => {
+    assertSender(event.sender)
+    return services.storage.createSession()
   })
   ipcMain.handle(IpcChannel.SessionGet, async (event, input: unknown) => {
     assertSender(event.sender)
-    return services.storage.getSession(transcriptIdSchema.parse(input))
+    return services.storage.getSession(idSchema.parse(input))
   })
   ipcMain.handle(IpcChannel.SessionRename, async (event, input: unknown) => {
     assertSender(event.sender)
-    const { id, title } = transcriptRenameSchema.parse(input)
-    return services.storage.renameSession(id, title)
+    const value = renameSchema.parse(input)
+    return services.storage.renameSession(value.id, value.title)
   })
   ipcMain.handle(IpcChannel.SessionDelete, async (event, input: unknown) => {
     assertSender(event.sender)
-    return services.storage.deleteSession(transcriptIdSchema.parse(input))
+    return services.storage.deleteSession(idSchema.parse(input))
   })
-  ipcMain.handle(
-    IpcChannel.SessionTranslate,
-    async (
-      event,
-      idInput: unknown,
-      enabledInput: unknown,
-      providerInput: unknown,
-      targetInput: unknown,
-    ) => {
-      assertSender(event.sender)
-      await services.transcript.translateSession(
-        transcriptIdSchema.parse(idInput),
-        z.boolean().parse(enabledInput),
-        translationProviderSchema.parse(providerInput),
-        translationTargetSchema.parse(targetInput),
-      )
-    },
-  )
-  ipcMain.handle(
-    IpcChannel.SessionExport,
-    async (
-      event,
-      idInput: unknown,
-      formatInput: unknown,
-      dialogTitleInput: unknown,
-      includeTranslationInput: unknown,
-      providerInput: unknown,
-      targetInput: unknown,
-    ) => {
-      assertSender(event.sender)
-      const format = formatSchema.parse(formatInput)
-      const dialogTitle = dialogTitleSchema.parse(dialogTitleInput)
-      const includeTranslation = z.boolean().parse(includeTranslationInput)
-      const provider = translationProviderSchema.parse(providerInput)
-      const targetLanguage = translationTargetSchema.parse(targetInput)
-      const session = await services.storage.getSession(transcriptIdSchema.parse(idInput))
-      const result = await dialog.showSaveDialog(window, {
-        title: dialogTitle,
-        defaultPath: `${session.title.replace(/[<>:"/\\|?*]/g, '-')}.${format}`,
-        filters: [{ name: format.toUpperCase(), extensions: [format] }],
-      })
-      if (result.canceled || !result.filePath) return false
-      await writeFile(
-        result.filePath,
-        renderSession(session, format, includeTranslation, provider, targetLanguage),
-        'utf8',
-      )
-      return true
-    },
-  )
-  ipcMain.handle(IpcChannel.WindowAlwaysOnTop, (event, enabled: unknown) => {
+  ipcMain.handle(IpcChannel.SessionExport, async (event, input: unknown) => {
     assertSender(event.sender)
-    if (typeof enabled !== 'boolean') throw new Error('Invalid window preference.')
-    window.setAlwaysOnTop(enabled)
+    const session = await services.storage.getSession(idSchema.parse(input))
+    const result = await dialog.showSaveDialog(window, {
+      title: 'Export generation metadata',
+      defaultPath: `${session.title.replace(/[<>:"/\\|?*]/g, '-')}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+    if (result.canceled || !result.filePath) return false
+    await writeFile(result.filePath, renderSessionMetadata(session), 'utf8')
+    return true
+  })
+  ipcMain.handle(IpcChannel.MediaSave, async (event, input: unknown) => {
+    assertSender(event.sender)
+    const value = assetSchema.parse(input)
+    const source = await services.assets.resolveAsset(value.sessionId, value.assetId)
+    const result = await dialog.showSaveDialog(window, {
+      title: 'Save generated media',
+      defaultPath: basename(source),
+    })
+    if (result.canceled || !result.filePath) return false
+    await copyFile(source, result.filePath)
+    return true
+  })
+  ipcMain.handle(IpcChannel.MediaShowInFolder, async (event, input: unknown) => {
+    assertSender(event.sender)
+    const value = assetSchema.parse(input)
+    shell.showItemInFolder(await services.assets.resolveAsset(value.sessionId, value.assetId))
+  })
+  ipcMain.handle(IpcChannel.ClipboardWrite, (event, input: unknown) => {
+    assertSender(event.sender)
+    clipboard.writeText(z.string().max(1_000_000).parse(input))
+  })
+  ipcMain.handle(IpcChannel.WindowAlwaysOnTop, (event, input: unknown) => {
+    assertSender(event.sender)
+    window.setAlwaysOnTop(z.boolean().parse(input))
   })
   ipcMain.handle(IpcChannel.WindowMinimize, (event) => {
     assertSender(event.sender)
@@ -323,9 +357,9 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
     assertSender(event.sender)
     return window.isMaximized()
   })
-  ipcMain.handle(IpcChannel.ThemeSet, (event, theme: unknown) => {
+  ipcMain.handle(IpcChannel.ThemeSet, (event, input: unknown) => {
     assertSender(event.sender)
-    if (theme !== 'light' && theme !== 'dark') throw new Error('Invalid theme.')
+    const theme = z.enum(['light', 'dark']).parse(input)
     if (process.platform === 'darwin') {
       window.setTitleBarOverlay({
         color: theme === 'dark' ? '#1f1f1f' : '#f4f4f4',
@@ -336,8 +370,7 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
   })
   ipcMain.handle(IpcChannel.ShellOpenExternal, async (event, input: unknown) => {
     assertSender(event.sender)
-    if (typeof input !== 'string') throw new Error('Invalid external URL.')
-    const url = new URL(input)
+    const url = new URL(z.string().url().parse(input))
     if (!TRUSTED_EXTERNAL_ORIGINS.has(url.origin)) throw new Error('This URL is not allowed.')
     await shell.openExternal(url.toString())
   })
@@ -354,7 +387,7 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
         level: parsed.data.level,
         module: parsed.data.module,
         message: parsed.data.message,
-        ...(parsed.data.details === undefined ? {} : { details: parsed.data.details }),
+        ...(parsed.data.details !== undefined ? { details: parsed.data.details } : {}),
       })
     }
   })
@@ -364,7 +397,6 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
   })
   ipcMain.handle(IpcChannel.UpdatesInstall, async (event) => {
     assertSender(event.sender)
-    await services.transcript.stop()
     await services.updater.quitAndInstall()
   })
 }

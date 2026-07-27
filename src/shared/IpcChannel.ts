@@ -1,5 +1,5 @@
 /**
- * Enumerates every IPC channel exposed by the desktop application.
+ * Enumerates every IPC channel exposed by AI Media Studio.
  */
 
 export enum IpcChannel {
@@ -9,17 +9,20 @@ export enum IpcChannel {
   CredentialsGet = 'credentials:get',
   CredentialsDelete = 'credentials:delete',
   CredentialsBalance = 'credentials:balance',
-  DeepgramModels = 'deepgram:models',
-  OpenRouterModels = 'openrouter:models',
-  SessionStart = 'session:start',
-  SessionStop = 'session:stop',
-  AudioChunk = 'audio:chunk',
+  ModelsGet = 'models:get',
+  ReferencesSelect = 'references:select',
+  ReferencesRelease = 'references:release',
+  AudioInputSelect = 'audio-input:select',
+  AudioInputRelease = 'audio-input:release',
+  GenerationStart = 'generation:start',
   SessionGet = 'session:get',
   SessionCreate = 'session:create',
   SessionRename = 'session:rename',
   SessionDelete = 'session:delete',
-  SessionTranslate = 'session:translate',
   SessionExport = 'session:export',
+  MediaSave = 'media:save',
+  MediaShowInFolder = 'media:show-in-folder',
+  ClipboardWrite = 'clipboard:write',
   WindowAlwaysOnTop = 'window:always-on-top',
   WindowMinimize = 'window:minimize',
   WindowToggleMaximize = 'window:toggle-maximize',
@@ -31,9 +34,7 @@ export enum IpcChannel {
   LogWrite = 'logs:write',
   UpdatesCheck = 'updates:check',
   UpdatesInstall = 'updates:install',
-  SessionState = 'event:session-state',
-  TranscriptResult = 'event:transcript-result',
-  TranslationResult = 'event:translation-result',
+  SessionUpdated = 'event:session-updated',
   AppError = 'event:error',
   UpdateState = 'event:update-state',
   WindowMaximizedChanged = 'event:window-maximized-changed',

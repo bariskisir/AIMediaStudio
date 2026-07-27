@@ -30,6 +30,8 @@
     "src/renderer/src/store/appSlice.ts",
     "src/renderer/src/services/SettingsPersistenceQueue.ts",
     "src/renderer/src/utils/formatters.ts",
+    "src/renderer/src/utils/generationStatus.ts",
+    "src/renderer/src/utils/modelSettings.ts",
     "src/shared/**/*.ts",
     "tests/**/*.ts"
   ]

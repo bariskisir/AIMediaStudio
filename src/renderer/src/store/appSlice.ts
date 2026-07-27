@@ -1,27 +1,24 @@
 /**
- * Stores application settings, runtime recording state, history, and update progress.
+ * Stores application settings, media catalogs, history, and desktop update state.
  */
 
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
+import type { MediaModel } from '@shared/openrouter'
 import {
   DEFAULT_SETTINGS,
+  type ApiBalance,
   type AppSettings,
   type BootstrapPayload,
-  type ApiBalance,
+  type MediaKind,
   type SessionDocument,
-  type SessionStateEvent,
   type SessionSummary,
-  type TranscriptResultEvent,
-  type TranslationResultEvent,
+  type SessionUpdatedEvent,
   type UpdateStateEvent,
 } from '@shared/types'
-import type { OpenRouterSpeechModel } from '@shared/openrouter'
-import type { DeepgramSpeechModel } from '@shared/deepgram'
-import type { TranscriptionProvider } from '@shared/transcription'
 
 export type AppPage = 'home' | 'settings'
 export type SettingsSection =
-  'general' | 'display' | 'transcription' | 'translation' | 'updates' | 'about' | 'logging'
+  'general' | 'display' | 'image' | 'video' | 'tts' | 'stt' | 'updates' | 'about' | 'logging'
 
 export interface AppState {
   initialized: boolean
@@ -30,18 +27,13 @@ export interface AppState {
   settings: AppSettings
   platform: BootstrapPayload['platform']
   version: string
-  hasApiKeys: Record<TranscriptionProvider, boolean>
-  apiBalances: Record<TranscriptionProvider, ApiBalance[]>
-  deepgramModels: DeepgramSpeechModel[]
-  openRouterModels: OpenRouterSpeechModel[]
+  hasApiKeys: Record<MediaKind, boolean>
+  apiBalances: Record<MediaKind, ApiBalance[]>
+  models: Record<MediaKind, MediaModel[]>
   sessions: SessionSummary[]
   currentSession: SessionDocument | null
-  session: SessionStateEvent
-  interim: { microphone: string; speaker: string }
-  levels: { microphone: number; speaker: number }
   update: UpdateStateEvent
   sessionsSidebarOpen: boolean
-  compactMode: boolean
 }
 
 const initialState: AppState = {
@@ -51,167 +43,113 @@ const initialState: AppState = {
   settings: DEFAULT_SETTINGS,
   platform: 'win32',
   version: '0.0.0',
-  hasApiKeys: { deepgram: false, openrouter: false },
-  apiBalances: { deepgram: [], openrouter: [] },
-  deepgramModels: [],
-  openRouterModels: [],
+  hasApiKeys: { image: false, video: false, tts: false, stt: false },
+  apiBalances: { image: [], video: [], tts: [], stt: [] },
+  models: { image: [], video: [], tts: [], stt: [] },
   sessions: [],
   currentSession: null,
-  session: { state: 'idle' },
-  interim: { microphone: '', speaker: '' },
-  levels: { microphone: 0, speaker: 0 },
   update: { state: 'idle' },
   sessionsSidebarOpen: true,
-  compactMode: false,
 }
 
 const appSlice = createSlice({
   name: 'app',
   initialState,
   reducers: {
-    /** Hydrates the renderer with persisted main-process state. */
+    /** Hydrates renderer state exactly once from the trusted preload bridge. */
     hydrate(state, action: PayloadAction<BootstrapPayload>) {
       if (state.initialized) return
-      state.initialized = true
-      state.settings = action.payload.settings
-      state.platform = action.payload.platform
-      state.version = action.payload.version
-      state.hasApiKeys = action.payload.hasApiKeys
-      state.deepgramModels = action.payload.deepgramModels
-      state.openRouterModels = action.payload.openRouterModels
-      state.sessions = action.payload.sessions
-      state.currentSession = action.payload.currentSession
+      Object.assign(state, {
+        initialized: true,
+        settings: action.payload.settings,
+        platform: action.payload.platform,
+        version: action.payload.version,
+        hasApiKeys: action.payload.hasApiKeys,
+        models: action.payload.models,
+        sessions: action.payload.sessions,
+        currentSession: action.payload.currentSession,
+      })
     },
-    /** Opens a top-level application page. */
+    /** Opens one top-level application page. */
     setPage(state, action: PayloadAction<AppPage>) {
       state.page = action.payload
-      if (action.payload !== 'home') state.compactMode = false
     },
-    /** Selects the settings category shown when the settings page is opened. */
+    /** Selects one settings category. */
     setSettingsSection(state, action: PayloadAction<SettingsSection>) {
       state.settingsSection = action.payload
     },
-    /** Replaces settings after successful persistence. */
+    /** Replaces settings only after durable persistence succeeds. */
     setSettings(state, action: PayloadAction<AppSettings>) {
       state.settings = action.payload
     },
-    /** Updates whether one transcription provider credential is available. */
-    setHasApiKey(
-      state,
-      action: PayloadAction<{ provider: TranscriptionProvider; available: boolean }>,
-    ) {
-      state.hasApiKeys[action.payload.provider] = action.payload.available
+    /** Updates availability of one independently encrypted media credential. */
+    setHasApiKey(state, action: PayloadAction<{ kind: MediaKind; available: boolean }>) {
+      state.hasApiKeys[action.payload.kind] = action.payload.available
     },
-    /** Replaces optional account balance data for one transcription provider. */
-    setApiBalance(
-      state,
-      action: PayloadAction<{ provider: TranscriptionProvider; balance: ApiBalance[] }>,
-    ) {
-      state.apiBalances[action.payload.provider] = action.payload.balance
+    /** Replaces optional balance data for one media credential. */
+    setApiBalance(state, action: PayloadAction<{ kind: MediaKind; balance: ApiBalance[] }>) {
+      state.apiBalances[action.payload.kind] = action.payload.balance
     },
-    /** Replaces session summaries from local storage. */
-    setSessions(state, action: PayloadAction<SessionSummary[]>) {
-      state.sessions = action.payload
+    /** Replaces one public model catalog after a manual refresh. */
+    setModels(state, action: PayloadAction<{ kind: MediaKind; models: MediaModel[] }>) {
+      state.models[action.payload.kind] = action.payload.models
     },
-    /** Inserts a newly created summary at the front without duplicating its identifier. */
-    addSessionSummary(state, action: PayloadAction<SessionSummary>) {
+    /** Inserts or updates one history summary in most-recent-first order. */
+    upsertSessionSummary(state, action: PayloadAction<SessionSummary>) {
       state.sessions = [
         action.payload,
-        ...state.sessions.filter((item) => item.id !== action.payload.id),
+        ...state.sessions.filter((candidate) => candidate.id !== action.payload.id),
       ]
     },
-    /** Replaces a known summary in place, or inserts it when sessions list was not yet synchronized. */
-    replaceSessionSummary(state, action: PayloadAction<SessionSummary>) {
-      const index = state.sessions.findIndex((item) => item.id === action.payload.id)
-      if (index === -1) state.sessions.unshift(action.payload)
-      else state.sessions[index] = action.payload
-    },
-    /** Removes one session summary by its durable identifier. */
+    /** Removes one durable history entry. */
     removeSessionSummary(state, action: PayloadAction<string>) {
-      state.sessions = state.sessions.filter((item) => item.id !== action.payload)
+      state.sessions = state.sessions.filter((candidate) => candidate.id !== action.payload)
     },
-    /** Sets the session displayed in the main reading surface. */
+    /** Selects one complete history document. */
     setCurrentSession(state, action: PayloadAction<SessionDocument | null>) {
       state.currentSession = action.payload
-      state.interim = { microphone: '', speaker: '' }
     },
-    /** Refreshes a document only when it is still the active session. */
-    replaceCurrentSession(state, action: PayloadAction<SessionDocument>) {
-      if (state.currentSession?.id === action.payload.id) {
-        state.currentSession = action.payload
-        state.interim = { microphone: '', speaker: '' }
+    /** Applies a background generation update to history and the selected document. */
+    receiveSessionUpdated(state, action: PayloadAction<SessionUpdatedEvent>) {
+      state.sessions = [
+        action.payload.summary,
+        ...state.sessions.filter((candidate) => candidate.id !== action.payload.summary.id),
+      ]
+      if (state.currentSession?.id === action.payload.session.id) {
+        state.currentSession = action.payload.session
       }
-    },
-    /** Applies a recording lifecycle event. */
-    setSessionState(state, action: PayloadAction<SessionStateEvent>) {
-      state.session = action.payload
-      if (action.payload.state === 'idle') {
-        state.levels = { microphone: 0, speaker: 0 }
-        state.interim = { microphone: '', speaker: '' }
-      }
-    },
-    /** Applies one interim or final transcription result. */
-    receiveTranscriptResult(state, action: PayloadAction<TranscriptResultEvent>) {
-      const event = action.payload
-      if (event.isFinal) {
-        state.interim[event.source] = ''
-        if (event.segment && state.currentSession) {
-          state.currentSession.segments.push(event.segment)
-        }
-      } else if (!event.isFinal) {
-        state.interim[event.source] = event.text
-      }
-    },
-    /** Appends one live translation only to its currently displayed session. */
-    receiveTranslationResult(state, action: PayloadAction<TranslationResultEvent>) {
-      if (state.currentSession?.id !== action.payload.transcriptId) return
-      const translation = action.payload.translation
-      if (!state.currentSession.translations.some((candidate) => candidate.id === translation.id)) {
-        state.currentSession.translations.push(translation)
-      }
-    },
-    /** Updates the live meter for one source. */
-    setAudioLevel(
-      state,
-      action: PayloadAction<{ source: 'microphone' | 'speaker'; level: number }>,
-    ) {
-      state.levels[action.payload.source] = action.payload.level
     },
     /** Applies desktop updater progress. */
     setUpdateState(state, action: PayloadAction<UpdateStateEvent>) {
       state.update = action.payload
     },
-    /** Shows or hides the session management sidebar for the current app session. */
+    /** Shows or hides history without changing durable preferences. */
     setSessionsSidebarOpen(state, action: PayloadAction<boolean>) {
       state.sessionsSidebarOpen = action.payload
     },
-    /** Toggles the distraction-free workspace with title-bar recording controls. */
-    setCompactMode(state, action: PayloadAction<boolean>) {
-      state.compactMode = action.payload
+    /** Removes all session summaries and clears the workspace. */
+    clearAllSessions(state) {
+      state.sessions = []
+      state.currentSession = null
     },
   },
 })
 
 export const {
-  addSessionSummary,
+  clearAllSessions,
   hydrate,
-  receiveTranscriptResult,
-  receiveTranslationResult,
+  receiveSessionUpdated,
   removeSessionSummary,
-  replaceCurrentSession,
-  replaceSessionSummary,
   setApiBalance,
-  setAudioLevel,
   setCurrentSession,
   setHasApiKey,
-  setSessions,
+  setModels,
   setPage,
-  setSessionState,
+  setSessionsSidebarOpen,
   setSettings,
   setSettingsSection,
-  setCompactMode,
-  setSessionsSidebarOpen,
   setUpdateState,
+  upsertSessionSummary,
 } = appSlice.actions
 
 export default appSlice.reducer

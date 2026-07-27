@@ -1,11 +1,10 @@
-/* Styles the primary transcription page layout. */
+/* Styles the split input/output workspace, compact mode control, and full-screen image preview. */
 
 .container {
-  width: 100%;
-  height: 100%;
+  display: flex;
+  min-width: 0;
   min-height: 0;
   flex: 1;
-  display: flex;
   overflow: hidden;
 }
 
@@ -13,7 +12,583 @@
   min-width: 0;
   min-height: 0;
   flex: 1;
+  overflow: hidden;
+}
+
+.workbench {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, var(--input-panel-width, 30%)) 6px minmax(0, 1fr);
+}
+
+.inputPanel,
+.outputPanel {
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--color-background);
+}
+
+.inputPanel {
+  container: input-panel / inline-size;
+}
+
+.outputPanel {
+  container: output-panel / inline-size;
+  background: color-mix(in srgb, var(--color-background-soft) 34%, var(--color-background));
+}
+
+.panelHeader {
+  min-height: 48px;
+  flex: 0 0 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 18px;
+  border-bottom: 0.5px solid var(--color-border);
+
+  strong {
+    color: var(--color-text-1);
+    font-size: 13px;
+    font-weight: 650;
+  }
+}
+
+.inputHeader,
+.outputHeader {
+  min-width: 0;
+}
+
+.inputHeader {
+  min-height: 48px;
+  flex-basis: 48px;
+}
+
+.modeControls {
+  width: min(300px, calc(100% - 42px));
+  min-width: 132px;
+}
+
+.cost {
+  flex: 0 0 auto;
+  color: var(--color-text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.outputMeta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.outputModelName {
+  min-width: 0;
+  overflow: hidden;
+  flex: 0 1 auto;
+  color: var(--color-text-2);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outputStatus {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 9px;
+  line-height: 17px;
+}
+
+.metaSeparator {
+  width: 1px;
+  height: 13px;
+  flex: 0 0 1px;
+  background: var(--color-border);
+}
+
+.panelScroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 18px;
+}
+
+.composer,
+.result {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.composer :global(.ant-card-body),
+.result :global(.ant-card-body) {
+  display: grid;
+  gap: 16px;
+  padding: 0;
+}
+
+.prompt {
+  resize: vertical;
+}
+
+.audioInputField {
+  min-height: 118px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 9px;
+  padding: 18px;
+  border: 0.5px dashed var(--color-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--color-background-soft) 45%, transparent);
+}
+
+.audioUploadButton {
+  max-width: 100%;
+}
+
+.audioInputSummary {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 9px;
+  color: var(--color-primary);
+
+  > svg {
+    justify-self: center;
+  }
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-text-1);
+    font-size: 12px;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  > :global(.ant-btn) {
+    justify-self: center;
+  }
+}
+
+.audioHint {
+  color: var(--color-text-3);
+  font-size: 10px;
+  text-align: center;
+}
+
+.modelSelect {
+  width: 100%;
+  height: 54px;
+}
+
+.modelSelect :global(.ant-select-selector) {
+  min-height: 54px !important;
+  padding-block: 5px !important;
+}
+
+.modelOption {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.3;
+}
+
+.modelName {
+  overflow: hidden;
+  color: var(--color-text-1);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelPrice {
+  overflow: hidden;
+  color: var(--color-text-3);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr));
+  gap: 7px;
+
+  > * {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+.speechHint {
+  grid-column: 1 / -1;
+  color: var(--color-text-3);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.settingsGrid :global(.ant-select),
+.settingsGrid :global(.ant-input-number),
+.settingsGrid :global(.ant-input-number-group-wrapper),
+.settingsGrid :global(.ant-input-number-wrapper) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settingsGrid :global(.ant-input-number-group-addon) {
+  padding-inline: 6px;
+}
+
+.nextSettingsRow {
+  grid-column-start: 1;
+}
+
+.panelSplitter {
+  position: relative;
+  z-index: 2;
+  min-width: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+
+  &::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: var(--color-border);
+    content: '';
+    transform: translateX(-50%);
+    transition:
+      width 120ms ease,
+      background-color 120ms ease;
+  }
+
+  &:hover::before,
+  &:focus-visible::before,
+  &:active::before {
+    width: 3px;
+    background: var(--color-primary);
+  }
+}
+
+.switchField {
+  min-width: 0;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 7px;
+  color: var(--color-text-2);
+  font-size: 12px;
+
+  :global(.ant-switch) {
+    flex: 0 0 auto;
+  }
+}
+
+.switchLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.references {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.references > :global(.ant-btn) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.reference {
+  width: min(215px, 100%);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 6px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.reference img {
+  width: 34px;
+  height: 34px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.reference span {
+  overflow: hidden;
+  flex: 1;
+  color: var(--color-text-2);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyOutput {
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+}
+
+.processing {
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--color-text-3);
+  text-align: center;
+}
+
+.mediaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 14px;
+}
+
+.mediaCard {
+  overflow: hidden;
+  margin: 0;
+  border: 0.5px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+}
+
+.previewButton {
+  width: 100%;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: #000;
+  cursor: default;
+}
+
+.previewButton img,
+.mediaCard video {
+  width: 100%;
+  max-height: calc(100dvh - 250px);
+  display: block;
+  object-fit: contain;
+  background: #000;
+}
+
+.mediaCard video:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  max-height: none;
+  object-fit: contain;
+  background: #000;
+}
+
+.audioOutput {
+  width: calc(100% - 24px);
+  display: block;
+  margin: 18px 12px 10px;
+}
+
+.transcriptionOutput {
+  overflow: hidden;
+  border: 0.5px solid var(--color-border);
+  border-radius: 9px;
+  background: var(--color-background);
+}
+
+.transcriptionHeader {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 4px 11px;
+  border-bottom: 0.5px solid var(--color-border);
+
+  strong {
+    color: var(--color-text-2);
+    font-size: 11px;
+    font-weight: 620;
+  }
+}
+
+.transcriptionText {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none !important;
+  resize: none;
+}
+
+.mediaCard figcaption {
+  display: flex;
+  justify-content: flex-end;
+  padding: 5px;
+}
+
+.previewModal {
+  width: fit-content !important;
+  max-width: calc(100vw - 24px);
+  padding-bottom: 0;
+
+  :global(.ant-modal-content) {
+    width: fit-content;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :global(.ant-modal-body) {
+    width: fit-content;
+    line-height: 0;
+  }
+}
+
+.previewViewport {
+  width: fit-content;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  line-height: 0;
+  cursor: default;
+  touch-action: none;
+}
+
+.fullPreview {
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  display: block;
+  object-fit: contain;
+  transform-origin: center;
+  will-change: transform;
+}
+
+@container input-panel (max-width: 320px) {
+  .inputHeader {
+    gap: 6px;
+    padding-inline: 10px;
+  }
+
+  .inputPanel .panelScroll {
+    padding: 12px;
+  }
+}
+
+@container input-panel (max-width: 400px) {
+  .inputHeader {
+    min-height: 68px;
+    flex-basis: 68px;
+  }
+}
+
+@container input-panel (max-width: 230px) {
+  .settingsGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inputHeader {
+    min-height: 68px;
+    flex-basis: 68px;
+    align-content: center;
+    flex-wrap: wrap;
+  }
+
+  .inputHeader > strong {
+    display: none;
+  }
+
+  .modeControls {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@container input-panel (max-width: 175px) {
+  .inputHeader {
+    min-height: 116px;
+    flex-basis: 116px;
+  }
+}
+
+@container output-panel (max-width: 430px) {
+  .outputHeader {
+    min-height: 72px;
+    flex-basis: 72px;
+    align-content: center;
+    flex-wrap: wrap;
+    gap: 3px 8px;
+    padding-block: 7px;
+  }
+
+  .outputMeta {
+    flex: 0 0 100%;
+    justify-content: flex-start;
+  }
+
+  .outputPanel .panelScroll {
+    padding: 12px;
+  }
+}
+
+@container output-panel (max-width: 260px) {
+  .outputMeta {
+    gap: 4px;
+  }
+
+  .outputModelName {
+    font-size: 10px;
+  }
+
+  .cost {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 980px) {
+  .panelHeader {
+    gap: 7px;
+    padding-inline: 10px;
+  }
+
+  .panelScroll {
+    padding: 12px;
+  }
 }

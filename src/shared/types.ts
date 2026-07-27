@@ -1,53 +1,101 @@
 /**
- * Defines serializable domain models and cross-process application contracts.
+ * Defines serializable media-generation domain models and cross-process contracts.
  */
 
-import {
-  DEFAULT_DEEPGRAM_TRANSCRIPTION_SETTINGS,
-  DEFAULT_OPENROUTER_TRANSCRIPTION_SETTINGS,
-  type TranscriptionProvider,
-  type TranscriptionProviderSettings,
-  type TranscriptionProviderSettingsPatch,
-} from './transcription'
-import type { OpenRouterSpeechModel } from './openrouter'
-import type { DeepgramSpeechModel } from './deepgram'
-import type { TranslationProvider, TranslationTargetLanguage } from './translation'
+import type {
+  ImageBackground,
+  ImageOutputFormat,
+  ImageQuality,
+  MediaKind,
+  MediaModel,
+  OpenRouterProvider,
+  TtsOutputFormat,
+} from './openrouter'
 
-export const AUDIO_SOURCES = ['microphone', 'speaker'] as const
+export type { MediaKind } from './openrouter'
+
 export const APP_LOCALES = ['en', 'tr', 'de', 'fr', 'pt', 'zh', 'es', 'ru', 'ja', 'ko'] as const
 export const THEME_MODES = ['system', 'light', 'dark'] as const
 export const NAVBAR_POSITIONS = ['left', 'top'] as const
+export const TIME_FORMATS = ['24-hour', '12-hour'] as const
+export const LOG_LEVELS = ['error', 'warn', 'info', 'debug', 'verbose'] as const
+export const GENERATION_STATUSES = [
+  'submitting',
+  'pending',
+  'in_progress',
+  'completed',
+  'failed',
+  'cancelled',
+  'expired',
+] as const
+
 /** Defines the supported page zoom range and control increment. */
 export const PAGE_ZOOM_LIMITS = { min: 0.5, max: 2, step: 0.1, default: 1 } as const
-export const TIME_FORMATS = ['24-hour', '12-hour'] as const
-export const SESSION_FORMATS = ['txt', 'json'] as const
-export const LOG_LEVELS = ['error', 'warn', 'info', 'debug', 'verbose'] as const
 
-export type AudioSource = (typeof AUDIO_SOURCES)[number]
+/** Defines the persisted input-panel share of the resizable generation workspace. */
+export const WORKSPACE_INPUT_PERCENT_LIMITS = { min: 25, max: 75, step: 2, default: 40 } as const
+
 export type AppLocale = (typeof APP_LOCALES)[number]
 export type ThemeMode = (typeof THEME_MODES)[number]
 export type NavbarPosition = (typeof NAVBAR_POSITIONS)[number]
 export type TimeFormat = (typeof TIME_FORMATS)[number]
-export type SessionFormat = (typeof SESSION_FORMATS)[number]
 export type LogLevel = (typeof LOG_LEVELS)[number]
+export type GenerationStatus = (typeof GENERATION_STATUSES)[number]
 export type DesktopPlatform = 'win32' | 'darwin' | 'linux'
 
+/** Stores image defaults independently from every future provider. */
+export interface ImageProviderSettings {
+  modelId: string
+  resolution: string
+  aspectRatio: string
+  quality: ImageQuality
+  outputFormat: ImageOutputFormat
+  count: number
+  background: ImageBackground
+  outputCompression: number
+  seed: number | null
+}
+
+/** Stores video defaults independently from every future provider. */
+export interface VideoProviderSettings {
+  modelId: string
+  duration: number
+  resolution: string
+  aspectRatio: string
+  size: string
+  generateAudio: boolean
+  seed: number | null
+}
+
+/** Stores text-to-speech defaults independently from every future provider. */
+export interface TtsProviderSettings {
+  modelId: string
+  voice: string
+  responseFormat: TtsOutputFormat
+  speed: number
+}
+
+/** Stores speech-to-text defaults independently from every future provider. */
+export interface SttProviderSettings {
+  modelId: string
+  language: string
+  temperature: number
+}
+
+/** Persists renderer preferences and provider-scoped generation defaults. */
 export interface AppSettings {
   settingsRevision: 1
   uiLanguage: AppLocale
   theme: ThemeMode
   navbarPosition: NavbarPosition
   pageZoom: number
+  workspaceInputPercent: number
   timeFormat: TimeFormat
-  transcriptionProvider: TranscriptionProvider
-  transcriptionProviderSettings: TranscriptionProviderSettings
-  translationProvider: TranslationProvider
-  translationEnabled: boolean
-  translationTargetLanguage: TranslationTargetLanguage
-  microphoneDeviceId: string
-  microphoneEnabled: boolean
-  speakerDeviceId: string
-  speakerEnabled: boolean
+  generationMode: MediaKind
+  image: { provider: OpenRouterProvider; providers: { openrouter: ImageProviderSettings } }
+  video: { provider: OpenRouterProvider; providers: { openrouter: VideoProviderSettings } }
+  tts: { provider: OpenRouterProvider; providers: { openrouter: TtsProviderSettings } }
+  stt: { provider: OpenRouterProvider; providers: { openrouter: SttProviderSettings } }
   alwaysOnTop: boolean
   showTrayIcon: boolean
   minimizeToTrayOnClose: boolean
@@ -56,10 +104,57 @@ export interface AppSettings {
 }
 
 export type AppSettingsPatch = {
-  [Key in keyof Omit<AppSettings, 'settingsRevision' | 'transcriptionProviderSettings'>]?:
+  [Key in keyof Omit<AppSettings, 'settingsRevision' | 'image' | 'video' | 'tts' | 'stt'>]?:
     AppSettings[Key] | undefined
 } & {
-  transcriptionProviderSettings?: TranscriptionProviderSettingsPatch | undefined
+  image?:
+    | {
+        provider?: OpenRouterProvider | undefined
+        providers?:
+          | {
+              openrouter?:
+                | { [Key in keyof ImageProviderSettings]?: ImageProviderSettings[Key] | undefined }
+                | undefined
+            }
+          | undefined
+      }
+    | undefined
+  video?:
+    | {
+        provider?: OpenRouterProvider | undefined
+        providers?:
+          | {
+              openrouter?:
+                | { [Key in keyof VideoProviderSettings]?: VideoProviderSettings[Key] | undefined }
+                | undefined
+            }
+          | undefined
+      }
+    | undefined
+  tts?:
+    | {
+        provider?: OpenRouterProvider | undefined
+        providers?:
+          | {
+              openrouter?:
+                | { [Key in keyof TtsProviderSettings]?: TtsProviderSettings[Key] | undefined }
+                | undefined
+            }
+          | undefined
+      }
+    | undefined
+  stt?:
+    | {
+        provider?: OpenRouterProvider | undefined
+        providers?:
+          | {
+              openrouter?:
+                | { [Key in keyof SttProviderSettings]?: SttProviderSettings[Key] | undefined }
+                | undefined
+            }
+          | undefined
+      }
+    | undefined
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -68,19 +163,60 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   navbarPosition: 'top',
   pageZoom: PAGE_ZOOM_LIMITS.default,
+  workspaceInputPercent: WORKSPACE_INPUT_PERCENT_LIMITS.default,
   timeFormat: '24-hour',
-  transcriptionProvider: 'deepgram',
-  transcriptionProviderSettings: {
-    deepgram: DEFAULT_DEEPGRAM_TRANSCRIPTION_SETTINGS,
-    openrouter: DEFAULT_OPENROUTER_TRANSCRIPTION_SETTINGS,
+  generationMode: 'image',
+  image: {
+    provider: 'openrouter',
+    providers: {
+      openrouter: {
+        modelId: '',
+        resolution: '1K',
+        aspectRatio: '1:1',
+        quality: 'auto',
+        outputFormat: 'png',
+        count: 1,
+        background: 'auto',
+        outputCompression: 90,
+        seed: null,
+      },
+    },
   },
-  translationProvider: 'google',
-  translationEnabled: false,
-  translationTargetLanguage: 'tr',
-  microphoneDeviceId: 'default',
-  microphoneEnabled: true,
-  speakerDeviceId: 'default',
-  speakerEnabled: true,
+  video: {
+    provider: 'openrouter',
+    providers: {
+      openrouter: {
+        modelId: '',
+        duration: 5,
+        resolution: '720p',
+        aspectRatio: '16:9',
+        size: '',
+        generateAudio: true,
+        seed: null,
+      },
+    },
+  },
+  tts: {
+    provider: 'openrouter',
+    providers: {
+      openrouter: {
+        modelId: '',
+        voice: '',
+        responseFormat: 'mp3',
+        speed: 1,
+      },
+    },
+  },
+  stt: {
+    provider: 'openrouter',
+    providers: {
+      openrouter: {
+        modelId: '',
+        language: '',
+        temperature: 0,
+      },
+    },
+  },
   alwaysOnTop: false,
   showTrayIcon: true,
   minimizeToTrayOnClose: true,
@@ -88,112 +224,208 @@ export const DEFAULT_SETTINGS: AppSettings = {
   logLevel: 'info',
 }
 
-export interface TranscriptSegment {
-  id: string
-  source: AudioSource
-  text: string
-  confidence: number
-  createdAt: string
-  offsetMs: number
+/** Identifies one encrypted credential independently for every media workflow. */
+export interface CredentialScope {
+  kind: MediaKind
+  provider: OpenRouterProvider
 }
 
-export interface TranslationSegment {
-  id: string
-  provider: TranslationProvider
-  sourceText: string
-  text: string
-  sourceLanguage: string
-  targetLanguage: TranslationTargetLanguage
-  sourceSegmentIds: string[]
-  sourceStartIndex: number
-  sourceEndIndex: number
-  createdAt: string
-}
-
-export interface SessionDocument {
-  id: string
-  title: string
-  isDefaultTitle: boolean
-  language: string
-  createdAt: string
-  updatedAt: string
-  durationMs: number
-  segments: TranscriptSegment[]
-  translations: TranslationSegment[]
-}
-
-export interface SessionSummary {
-  id: string
-  title: string
-  isDefaultTitle: boolean
-  language: string
-  createdAt: string
-  updatedAt: string
-  durationMs: number
-  segmentCount: number
-  preview: string
-}
-
-export interface BootstrapPayload {
-  settings: AppSettings
-  sessions: SessionSummary[]
-  currentSession: SessionDocument
-  hasApiKeys: Record<TranscriptionProvider, boolean>
-  deepgramModels: DeepgramSpeechModel[]
-  openRouterModels: OpenRouterSpeechModel[]
-  platform: DesktopPlatform
-  version: string
-}
-
-export interface StartSessionRequest {
-  settings: AppSettings
-  transcriptId?: string
-  title?: string
-}
-
-export interface StartSessionResult {
-  session: SessionDocument
-  activeSources: AudioSource[]
-}
-
-export interface DeleteSessionResult {
-  deleted: boolean
-  replacement?: SessionDocument
-}
-
-/** Provider-neutral account balance amount and billing unit. */
+/** Describes a provider-neutral account balance amount and billing unit. */
 export interface ApiBalance {
   amount: number
   units: string
 }
 
-export interface SessionStateEvent {
-  state: 'idle' | 'connecting' | 'recording' | 'stopping'
-  transcriptId?: string
-  startedAt?: string
+/** Reports the validated balance and credential scopes changed by one key save. */
+export interface ApiKeySaveResult {
+  balance: ApiBalance[]
+  updatedKinds: MediaKind[]
 }
 
-export interface TranscriptResultEvent {
-  source: AudioSource
-  text: string
-  isFinal: boolean
-  speechFinal: boolean
-  confidence: number
-  segment?: TranscriptSegment
+/** References a selected local image without exposing its file-system path. */
+export interface ReferenceImage {
+  token: string
+  name: string
+  mediaType: string
+  previewUrl: string
 }
 
-export interface TranslationResultEvent {
-  transcriptId: string
-  translation: TranslationSegment
+/** Represents one validated local audio selection without exposing its path. */
+export interface AudioInputSelection {
+  token: string
+  name: string
+  mediaType: string
+  format: import('./openrouter').AudioInputFormat
+  size: number
 }
 
+/** Stores a session-owned audio input so STT history can be regenerated safely. */
+export interface PersistedAudioInput {
+  originalName: string
+  fileName: string
+  mediaType: string
+  format: import('./openrouter').AudioInputFormat
+  size: number
+}
+
+/** Records an application-owned output that can be served through the media protocol. */
+export interface MediaAsset {
+  id: string
+  fileName: string
+  mediaType: string
+  size: number
+  url: string
+}
+
+/** Stores the exact image request settings used by a generation. */
+export interface ImageGenerationOptions {
+  resolution?: string
+  aspectRatio?: string
+  quality?: ImageQuality
+  outputFormat?: ImageOutputFormat
+  count?: number
+  background?: ImageBackground
+  outputCompression?: number
+  seed?: number
+}
+
+/** Stores the exact video request settings used by a generation. */
+export interface VideoGenerationOptions {
+  duration?: number
+  resolution?: string
+  aspectRatio?: string
+  size?: string
+  generateAudio?: boolean
+  seed?: number
+}
+
+/** Stores the exact text-to-speech request settings used by a generation. */
+export interface TtsGenerationOptions {
+  voice: string
+  responseFormat: TtsOutputFormat
+  speed: number
+}
+
+/** Stores the exact speech-to-text request settings used by a generation. */
+export interface SttGenerationOptions {
+  language?: string
+  temperature?: number
+}
+
+/** Discriminates image reference roles accepted by the media APIs. */
+export interface GenerationReference {
+  token: string
+  role: 'reference' | 'first_frame' | 'last_frame'
+}
+
+/** Submits one media job without exposing provider credentials or local paths. */
+export type GenerateRequest =
+  | {
+      kind: 'image'
+      prompt: string
+      modelId: string
+      options: ImageGenerationOptions
+      references: GenerationReference[]
+      sessionId?: string
+    }
+  | {
+      kind: 'tts'
+      prompt: string
+      modelId: string
+      options: TtsGenerationOptions
+      sessionId?: string
+    }
+  | {
+      kind: 'stt'
+      modelId: string
+      options: SttGenerationOptions
+      audio: { token: string } | { sourceSessionId: string }
+      sessionId?: string
+    }
+  | {
+      kind: 'video'
+      prompt: string
+      modelId: string
+      options: VideoGenerationOptions
+      references: GenerationReference[]
+      sessionId?: string
+    }
+
+/** Stores one complete generation record without secrets, base64 data, or absolute paths. */
+export interface GenerationItem {
+  id: string
+  kind: MediaKind
+  provider: OpenRouterProvider
+  modelId: string
+  prompt: string
+  status: GenerationStatus
+  createdAt: string
+  updatedAt: string
+  options:
+    ImageGenerationOptions | VideoGenerationOptions | TtsGenerationOptions | SttGenerationOptions
+  assets: MediaAsset[]
+  inputAudio?: PersistedAudioInput
+  resultText?: string
+  costUsd?: number
+  error?: string
+  remoteJobId?: string
+  pollingUrl?: string
+}
+
+/** Represents one durable history workspace containing at most one generation. */
+export interface SessionDocument {
+  id: string
+  title: string
+  isDefaultTitle: boolean
+  createdAt: string
+  updatedAt: string
+  item: GenerationItem | null
+}
+
+/** Provides compact history data for the sessions sidebar. */
+export interface SessionSummary {
+  id: string
+  title: string
+  isDefaultTitle: boolean
+  createdAt: string
+  updatedAt: string
+  hasItem: boolean
+  mediaKind?: MediaKind
+  status?: GenerationStatus
+  preview: string
+}
+
+/** Reports a delete operation and its invariant-preserving replacement workspace. */
+export interface DeleteSessionResult {
+  deleted: boolean
+  replacement?: SessionDocument
+}
+
+/** Hydrates the renderer with durable state and public model catalogs. */
+export interface BootstrapPayload {
+  settings: AppSettings
+  sessions: SessionSummary[]
+  currentSession: SessionDocument
+  hasApiKeys: Record<MediaKind, boolean>
+  models: Record<MediaKind, MediaModel[]>
+  platform: DesktopPlatform
+  version: string
+}
+
+/** Notifies the renderer whenever one background generation changes. */
+export interface SessionUpdatedEvent {
+  session: SessionDocument
+  summary: SessionSummary
+}
+
+/** Delivers renderer-safe operational failures. */
 export interface AppErrorEvent {
-  source?: AudioSource
-  context?: 'transcription' | 'translation'
+  context: MediaKind | 'storage' | 'system'
   message: string
   recoverable: boolean
 }
 
+/** Transfers one validated renderer diagnostic to the main process. */
 export interface RendererLogEntry {
   level: LogLevel
   module: string
@@ -201,6 +433,7 @@ export interface RendererLogEntry {
   details?: string
 }
 
+/** Describes the desktop updater lifecycle. */
 export interface UpdateStateEvent {
   state: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error'
   version?: string
@@ -209,87 +442,42 @@ export interface UpdateStateEvent {
   message?: string
 }
 
-export interface TranscriptApi {
-  /** Loads persisted settings, session list, and application metadata. */
+/** Exposes the complete capability-limited bridge to the sandboxed renderer. */
+export interface AIMediaStudioApi {
   bootstrap(): Promise<BootstrapPayload>
-  /** Atomically merges and persists validated application settings fields. */
   saveSettings(patch: AppSettingsPatch): Promise<AppSettings>
-  /** Validates, encrypts, and persists one provider key, returning supported balance data. */
-  saveApiKey(provider: TranscriptionProvider, apiKey: string): Promise<ApiBalance[]>
-  /** Decrypts the selected provider key only when explicitly requested by settings. */
-  getApiKey(provider: TranscriptionProvider): Promise<string | null>
-  /** Removes one provider's encrypted API key. */
-  deleteApiKey(provider: TranscriptionProvider): Promise<void>
-  /** Retrieves optional balance data for one encrypted provider key. */
-  getApiBalance(provider: TranscriptionProvider): Promise<ApiBalance[]>
-  /** Retrieves unauthenticated public Deepgram streaming STT models. */
-  getDeepgramModels(): Promise<DeepgramSpeechModel[]>
-  /** Retrieves duration-priced OpenRouter speech models ordered by hourly cost. */
-  getOpenRouterModels(): Promise<OpenRouterSpeechModel[]>
-  /** Starts a new source-separated transcription session. */
-  startSession(request: StartSessionRequest): Promise<StartSessionResult>
-  /** Flushes and stops the active transcription session. */
-  stopSession(): Promise<SessionDocument | null>
-  /** Sends one source-specific PCM16 audio frame. */
-  sendAudio(source: AudioSource, samples: ArrayBuffer): void
-  /** Creates and persists one empty session workspace. */
-  createSession(language: string): Promise<SessionDocument>
-  /** Loads one complete session. */
+  saveApiKey(scope: CredentialScope, apiKey: string): Promise<ApiKeySaveResult>
+  getApiKey(scope: CredentialScope): Promise<string | null>
+  deleteApiKey(scope: CredentialScope): Promise<void>
+  getApiBalance(scope: CredentialScope): Promise<ApiBalance[]>
+  getModels(kind: MediaKind, refresh?: boolean): Promise<MediaModel[]>
+  selectReferenceImages(kind: Extract<MediaKind, 'image' | 'video'>): Promise<ReferenceImage[]>
+  releaseReferenceImages(tokens: string[]): Promise<void>
+  selectAudioInput(): Promise<AudioInputSelection | null>
+  releaseAudioInput(token: string): Promise<void>
+  generate(request: GenerateRequest): Promise<SessionDocument>
+  createSession(): Promise<SessionDocument>
   getSession(id: string): Promise<SessionDocument>
-  /** Renames one session and returns the updated document. */
   renameSession(id: string, title: string): Promise<SessionDocument>
-  /** Deletes one session while preserving the last-workspace invariant. */
   deleteSession(id: string): Promise<DeleteSessionResult>
-  /** Changes a session's live provider/target and schedules its existing text for translation. */
-  translateSession(
-    id: string,
-    enabled: boolean,
-    provider: TranslationProvider,
-    targetLanguage: TranslationTargetLanguage,
-  ): Promise<void>
-  /** Exports a session through a native save dialog. */
-  exportSession(
-    id: string,
-    format: SessionFormat,
-    dialogTitle: string,
-    includeTranslation: boolean,
-    provider: TranslationProvider,
-    targetLanguage: TranslationTargetLanguage,
-  ): Promise<boolean>
-  /** Changes the native always-on-top state. */
+  exportSession(id: string): Promise<boolean>
+  saveMedia(sessionId: string, assetId: string): Promise<boolean>
+  showMediaInFolder(sessionId: string, assetId: string): Promise<void>
+  copyText(text: string): Promise<void>
   setAlwaysOnTop(enabled: boolean): Promise<void>
-  /** Minimizes the main application window. */
   minimizeWindow(): Promise<void>
-  /** Toggles maximized state and returns the resulting state. */
   toggleMaximizeWindow(): Promise<boolean>
-  /** Closes the main application window through its graceful shutdown path. */
   closeWindow(): Promise<void>
-  /** Reports whether the main application window is maximized. */
   isWindowMaximized(): Promise<boolean>
-  /** Synchronizes native window chrome with the resolved renderer theme. */
   setTheme(theme: Exclude<ThemeMode, 'system'>): Promise<void>
-  /** Opens an allow-listed URL in the system browser. */
   openExternal(url: string): Promise<void>
-  /** Opens the application log directory in the operating-system file manager. */
   openLogsDirectory(): Promise<void>
-  /** Persists one validated renderer diagnostic through the main logger. */
   writeLog(entry: RendererLogEntry): void
-  /** Checks GitHub Releases for an application update. */
   checkForUpdates(): Promise<void>
-  /** Restarts and installs a downloaded update. */
   installUpdate(): Promise<void>
-  /** Subscribes to recording lifecycle events. */
-  onSessionState(listener: (event: SessionStateEvent) => void): () => void
-  /** Subscribes to interim and final transcription results. */
-  onTranscriptResult(listener: (event: TranscriptResultEvent) => void): () => void
-  /** Subscribes to completed live sentence translations. */
-  onTranslationResult(listener: (event: TranslationResultEvent) => void): () => void
-  /** Subscribes to recoverable application errors. */
+  onSessionUpdated(listener: (event: SessionUpdatedEvent) => void): () => void
   onError(listener: (event: AppErrorEvent) => void): () => void
-  /** Subscribes to updater lifecycle events. */
   onUpdateState(listener: (event: UpdateStateEvent) => void): () => void
-  /** Subscribes to native maximize and restore state changes. */
   onWindowMaximizedChange(listener: (maximized: boolean) => void): () => void
-  /** Subscribes to settings navigation requested from native desktop UI. */
   onSettingsOpenRequested(listener: () => void): () => void
 }

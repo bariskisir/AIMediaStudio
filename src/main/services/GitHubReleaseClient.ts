@@ -1,5 +1,5 @@
 /**
- * Retrieves published Transcript releases and downloads verified Windows installers from GitHub.
+ * Retrieves published AI Media Studio releases and downloads verified Windows installers.
  */
 
 import { createHash } from 'node:crypto'
@@ -86,7 +86,7 @@ export const selectWindowsInstaller = (
   architecture: NodeJS.Architecture,
 ): GitHubReleaseAsset => {
   const releaseArchitecture = getReleaseArchitecture(architecture)
-  const expectedName = `transcript-${release.version}-windows-${releaseArchitecture}-setup.exe`
+  const expectedName = `aimediastudio-${release.version}-windows-${releaseArchitecture}-setup.exe`
   const asset = release.assets.find(
     (candidate) => candidate.name.toLowerCase() === expectedName.toLowerCase(),
   )
@@ -121,7 +121,7 @@ export default class GitHubReleaseClient {
     const response = await this.fetcher(RELEASES_API_URL, {
       headers: {
         Accept: 'application/vnd.github+json',
-        'User-Agent': 'Transcript-Desktop',
+        'User-Agent': 'aimediastudio-desktop',
         'X-GitHub-Api-Version': '2022-11-28',
       },
       signal: AbortSignal.timeout(30_000),
@@ -142,7 +142,7 @@ export default class GitHubReleaseClient {
     parseVersion(version)
     return {
       version,
-      name: parsed.name ?? `Transcript v${version}`,
+      name: parsed.name ?? `AI Media Studio v${version}`,
       ...(parsed.body ? { releaseNotes: parsed.body } : {}),
       pageUrl: parsed.html_url,
       assets: parsed.assets.map((asset) => ({
@@ -164,7 +164,7 @@ export default class GitHubReleaseClient {
     await mkdir(destinationDirectory, { recursive: true })
     const filePath = join(destinationDirectory, asset.name)
     const response = await this.fetcher(asset.downloadUrl, {
-      headers: { 'User-Agent': 'Transcript-Desktop' },
+      headers: { 'User-Agent': 'aimediastudio-desktop' },
       redirect: 'follow',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })

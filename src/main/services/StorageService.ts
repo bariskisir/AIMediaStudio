@@ -1,387 +1,384 @@
 /**
- * Stores validated settings and sessions through serialized direct JSON file access.
+ * Persists validated settings and one-generation session documents in isolated JSON files.
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
+import { join, resolve, sep } from 'node:path'
+import { MEDIA_KINDS } from '@shared/openrouter'
 import {
-  AUDIO_SOURCES,
+  GENERATION_STATUSES,
+  DEFAULT_SETTINGS,
   type AppSettings,
   type AppSettingsPatch,
   type DeleteSessionResult,
+  type GenerationItem,
   type SessionDocument,
-  type TranscriptSegment,
   type SessionSummary,
-  type TranslationSegment,
 } from '@shared/types'
-import { TRANSLATION_PROVIDERS, TRANSLATION_TARGET_LANGUAGES } from '@shared/translation'
 import { z } from 'zod'
 import { parsePersistedSettings, settingsSchema } from '../settingsSchema'
 
-const segmentSchema = z.object({
+const mediaAssetSchema = z.object({
   id: z.uuid(),
-  source: z.enum(AUDIO_SOURCES),
-  text: z.string(),
-  confidence: z.number().min(0).max(1),
-  createdAt: z.iso.datetime(),
-  offsetMs: z.number().nonnegative(),
+  fileName: z.string().min(1).max(240),
+  mediaType: z.string().min(1).max(100),
+  size: z.number().int().nonnegative(),
+  url: z.string().min(1).max(500),
 })
 
-const translationSchema = z
-  .object({
-    id: z.uuid(),
-    provider: z.enum(TRANSLATION_PROVIDERS),
-    sourceText: z.string().trim().min(1).max(20_000),
-    text: z.string().trim().min(1).max(20_000),
-    sourceLanguage: z.string().trim().min(1).max(24),
-    targetLanguage: z.enum(TRANSLATION_TARGET_LANGUAGES),
-    sourceSegmentIds: z.array(z.uuid()).min(1).max(200),
-    sourceStartIndex: z.number().int().nonnegative(),
-    sourceEndIndex: z.number().int().positive(),
-    createdAt: z.iso.datetime(),
-  })
-  .refine((translation) => translation.sourceEndIndex > translation.sourceStartIndex, {
-    path: ['sourceEndIndex'],
-    message: 'Translation source range must have a positive length.',
-  })
+const persistedAudioInputSchema = z.object({
+  originalName: z.string().min(1).max(240),
+  fileName: z.string().min(1).max(240),
+  mediaType: z.string().min(1).max(100),
+  format: z.enum(['wav', 'mp3', 'flac', 'm4a', 'ogg', 'webm', 'aac']),
+  size: z.number().int().positive(),
+})
+
+const generationItemSchema = z.object({
+  id: z.uuid(),
+  kind: z.enum(MEDIA_KINDS),
+  provider: z.literal('openrouter'),
+  modelId: z.string().min(1).max(200),
+  prompt: z.string().max(20_000),
+  status: z.enum(GENERATION_STATUSES),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  options: z.record(z.string(), z.unknown()),
+  assets: z.array(mediaAssetSchema).max(10),
+  inputAudio: persistedAudioInputSchema.optional(),
+  resultText: z.string().max(1_000_000).optional(),
+  costUsd: z.number().nonnegative().optional(),
+  error: z.string().max(4_000).optional(),
+  remoteJobId: z.string().max(500).optional(),
+  pollingUrl: z.url().optional(),
+})
 
 const sessionSchema = z.object({
   id: z.uuid(),
   title: z.string().min(1).max(200),
   isDefaultTitle: z.boolean(),
-  language: z.string().min(1).max(24),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  durationMs: z.number().nonnegative(),
-  segments: z.array(segmentSchema),
-  translations: z.array(translationSchema),
+  item: generationItemSchema.nullable(),
 })
 
-const DEFAULT_SESSION_TITLE = 'New Session'
-const LEGACY_DEFAULT_TITLE_PATTERN = /^\d{4}-\d{2}-\d{2}\s*(?:\u00b7|\.|T)\s*\d{2}:\d{2}$/
+const DEFAULT_SESSION_TITLE = 'New Generation'
 
-/** Rewrites source names from the first Electron schema before domain validation. */
-const migrateSession = (input: unknown): unknown => {
-  if (!input || typeof input !== 'object') return input
-  const session = input as Record<string, unknown>
-  if (!Array.isArray(session.segments)) return input
-  const segments = session.segments as unknown[]
-  const hasLegacyDefaultTitle =
-    typeof session.title === 'string' &&
-    (session.title === DEFAULT_SESSION_TITLE || LEGACY_DEFAULT_TITLE_PATTERN.test(session.title))
-  const isDefaultTitle =
-    typeof session.isDefaultTitle === 'boolean' ? session.isDefaultTitle : hasLegacyDefaultTitle
-  return {
-    ...session,
-    title:
-      isDefaultTitle &&
-      typeof session.title === 'string' &&
-      LEGACY_DEFAULT_TITLE_PATTERN.test(session.title)
-        ? DEFAULT_SESSION_TITLE
-        : session.title,
-    isDefaultTitle,
-    translations: Array.isArray(session.translations)
-      ? session.translations.map((translation): unknown => {
-          if (!translation || typeof translation !== 'object') return translation
-          const value = translation as Record<string, unknown>
-          return { provider: 'google', ...value }
-        })
-      : [],
-    segments: segments.map((segment): unknown => {
-      if (!segment || typeof segment !== 'object') return segment
-      const value = segment as Record<string, unknown>
-      return value.source === 'system' ? { ...value, source: 'speaker' } : value
-    }),
-  }
-}
-
-/** Rejects identifiers that could escape the session directory. */
+/** Rejects identifiers that could escape private application storage. */
 const assertSessionId = (id: string): void => {
   if (!z.uuid().safeParse(id).success) throw new Error('Invalid session identifier.')
 }
 
+/** Converts one document to renderer-friendly history metadata. */
+export const toSessionSummary = (document: SessionDocument): SessionSummary => ({
+  id: document.id,
+  title: document.title,
+  isDefaultTitle: document.isDefaultTitle,
+  createdAt: document.createdAt,
+  updatedAt: document.updatedAt,
+  hasItem: document.item !== null,
+  ...(document.item ? { mediaKind: document.item.kind, status: document.item.status } : {}),
+  preview:
+    (document.item?.kind === 'stt'
+      ? document.item.resultText || document.item.inputAudio?.originalName
+      : document.item?.prompt
+    )?.slice(0, 140) ?? '',
+})
+
 export default class StorageService {
   private readonly settingsPath: string
   private readonly sessionsPath: string
-  private readonly fileOperationTails = new Map<string, Promise<void>>()
+  private readonly mediaPath: string
+  private readonly operationTails = new Map<string, Promise<void>>()
 
-  /** Creates a storage service rooted in the private application data directory. */
+  /** Creates a storage service rooted exclusively in AI Media Studio AppData. */
   public constructor(private readonly rootPath: string) {
     this.settingsPath = join(rootPath, 'settings.json')
     this.sessionsPath = join(rootPath, 'sessions')
+    this.mediaPath = join(rootPath, 'media')
   }
 
-  /** Creates required directories and removes obsolete temporary files from previous versions. */
+  /** Creates the durable directory layout before other services access it. */
   public async initialize(): Promise<void> {
-    await mkdir(this.rootPath, { recursive: true })
-    await mkdir(this.sessionsPath, { recursive: true })
     await Promise.all([
-      this.removeObsoleteTemporaryFiles(this.rootPath),
-      this.removeObsoleteTemporaryFiles(this.sessionsPath),
+      mkdir(this.rootPath, { recursive: true }),
+      mkdir(this.sessionsPath, { recursive: true }),
+      mkdir(this.mediaPath, { recursive: true }),
     ])
   }
 
-  /** Loads validated settings or safe defaults for missing or malformed data. */
+  /** Returns the validated media root for protocol and asset services. */
+  public getMediaRoot(): string {
+    return this.mediaPath
+  }
+
+  /** Loads validated settings or new-application defaults. */
   public async loadSettings(): Promise<AppSettings> {
-    return this.withFileLock(this.settingsPath, () => this.readSettingsUnlocked())
-  }
-
-  /** Reads settings while its caller owns the settings-file operation lock. */
-  private async readSettingsUnlocked(): Promise<AppSettings> {
-    try {
-      const value: unknown = JSON.parse(await readFile(this.settingsPath, 'utf8'))
-      return parsePersistedSettings(value)
-    } catch {
-      return parsePersistedSettings(null)
-    }
-  }
-
-  /** Validates and writes application settings directly to their JSON file. */
-  public async saveSettings(settings: AppSettings): Promise<AppSettings> {
-    const validated = settingsSchema.parse(settings)
-    await this.writeJsonFile(this.settingsPath, validated)
-    return validated
-  }
-
-  /** Atomically merges changed fields into the latest validated settings document. */
-  public async updateSettings(patch: AppSettingsPatch): Promise<AppSettings> {
-    return this.withFileLock(this.settingsPath, async () => {
-      const current = await this.readSettingsUnlocked()
-      const deepgramPatch = patch.transcriptionProviderSettings?.deepgram
-      const openRouterPatch = patch.transcriptionProviderSettings?.openrouter
-      const validated = settingsSchema.parse({
-        ...current,
-        ...patch,
-        transcriptionProviderSettings:
-          deepgramPatch || openRouterPatch
-            ? {
-                ...current.transcriptionProviderSettings,
-                deepgram: {
-                  ...current.transcriptionProviderSettings.deepgram,
-                  ...deepgramPatch,
-                },
-                openrouter: {
-                  ...current.transcriptionProviderSettings.openrouter,
-                  ...openRouterPatch,
-                },
-              }
-            : current.transcriptionProviderSettings,
-      })
-      await this.writeJsonFileUnlocked(this.settingsPath, validated)
-      return validated
+    return this.withLock(this.settingsPath, async () => {
+      try {
+        return parsePersistedSettings(JSON.parse(await readFile(this.settingsPath, 'utf8')))
+      } catch {
+        return parsePersistedSettings(null)
+      }
     })
   }
 
-  /** Creates a new empty session. */
-  public async createSession(language: string, title?: string): Promise<SessionDocument> {
-    const now = new Date()
+  /** Merges nested provider settings without discarding another media mode. */
+  public async updateSettings(patch: AppSettingsPatch): Promise<AppSettings> {
+    return this.withLock(this.settingsPath, async () => {
+      let current = structuredClone(DEFAULT_SETTINGS)
+      try {
+        current = parsePersistedSettings(JSON.parse(await readFile(this.settingsPath, 'utf8')))
+      } catch {
+        // Defaults are intentionally used when no durable settings exist.
+      }
+      const imagePatch = patch.image?.providers?.openrouter
+      const videoPatch = patch.video?.providers?.openrouter
+      const ttsPatch = patch.tts?.providers?.openrouter
+      const sttPatch = patch.stt?.providers?.openrouter
+      const next = settingsSchema.parse({
+        ...current,
+        ...patch,
+        image: {
+          provider: patch.image?.provider ?? current.image.provider,
+          providers: {
+            openrouter: { ...current.image.providers.openrouter, ...imagePatch },
+          },
+        },
+        video: {
+          provider: patch.video?.provider ?? current.video.provider,
+          providers: {
+            openrouter: { ...current.video.providers.openrouter, ...videoPatch },
+          },
+        },
+        tts: {
+          provider: patch.tts?.provider ?? current.tts.provider,
+          providers: {
+            openrouter: { ...current.tts.providers.openrouter, ...ttsPatch },
+          },
+        },
+        stt: {
+          provider: patch.stt?.provider ?? current.stt.provider,
+          providers: {
+            openrouter: { ...current.stt.providers.openrouter, ...sttPatch },
+          },
+        },
+      })
+      await this.writeJsonUnlocked(this.settingsPath, next)
+      return next
+    })
+  }
+
+  /** Creates one empty workspace so history is never structurally absent. */
+  public async createSession(title?: string): Promise<SessionDocument> {
+    const now = new Date().toISOString()
     const normalizedTitle = title?.trim().slice(0, 200)
-    const session: SessionDocument = {
+    const document: SessionDocument = {
       id: randomUUID(),
       title: normalizedTitle || DEFAULT_SESSION_TITLE,
       isDefaultTitle: !normalizedTitle,
-      language,
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-      durationMs: 0,
-      segments: [],
-      translations: [],
+      createdAt: now,
+      updatedAt: now,
+      item: null,
     }
-    await this.writeSession(session)
-    return session
+    await this.writeSession(document)
+    return document
   }
 
-  /** Adds one final source-attributed segment to a session. */
-  public async appendSegment(id: string, segment: TranscriptSegment): Promise<void> {
-    await this.appendSegments(id, [segment])
-  }
-
-  /** Adds a batch of final segments within one serialized read-modify-write operation. */
-  public async appendSegments(id: string, segments: TranscriptSegment[]): Promise<void> {
-    if (segments.length === 0) return
-    const validatedSegments = segments.map((segment) => segmentSchema.parse(segment))
-    await this.updateSession(id, (session) => {
-      session.segments.push(...validatedSegments)
-      session.updatedAt = new Date().toISOString()
-    })
-  }
-
-  /** Adds one validated sentence translation without duplicating its source-language pair. */
-  public async appendTranslation(id: string, translation: TranslationSegment): Promise<void> {
-    const validatedTranslation = translationSchema.parse(translation)
-    await this.updateSession(id, (session) => {
-      const duplicate = session.translations.some(
-        (candidate) =>
-          candidate.sourceEndIndex === validatedTranslation.sourceEndIndex &&
-          candidate.provider === validatedTranslation.provider &&
-          candidate.sourceLanguage === validatedTranslation.sourceLanguage &&
-          candidate.targetLanguage === validatedTranslation.targetLanguage,
-      )
-      if (duplicate) return
-      session.translations.push(validatedTranslation)
-      session.updatedAt = new Date().toISOString()
-    })
-  }
-
-  /** Finalizes a session with its total recording duration. */
-  public async finishSession(id: string, durationMs: number): Promise<SessionDocument> {
-    return this.updateSession(id, (session) => {
-      session.durationMs = Math.max(0, Math.round(durationMs))
-      session.updatedAt = new Date().toISOString()
-    })
-  }
-
-  /** Loads and validates one complete session. */
+  /** Loads one complete generation workspace. */
   public async getSession(id: string): Promise<SessionDocument> {
     assertSessionId(id)
     const filePath = this.sessionPath(id)
-    return this.withFileLock(filePath, () => this.readSessionUnlocked(filePath))
+    return this.withLock(filePath, () => this.readSessionUnlocked(filePath))
   }
 
-  /** Lists compact session summaries in reverse chronological order. */
+  /** Returns compact history entries with the most recently changed first. */
   public async listSessions(): Promise<SessionSummary[]> {
     const entries = await readdir(this.sessionsPath, { withFileTypes: true })
     const documents = await Promise.all(
       entries
         .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-        .map((entry) => this.tryReadSession(join(this.sessionsPath, entry.name))),
+        .map(async (entry): Promise<SessionDocument | null> => {
+          try {
+            return await this.readSessionUnlocked(join(this.sessionsPath, entry.name))
+          } catch {
+            return null
+          }
+        }),
     )
-
     return documents
       .filter((document): document is SessionDocument => document !== null)
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-      .map((document) => ({
-        id: document.id,
-        title: document.title,
-        isDefaultTitle: document.isDefaultTitle,
-        language: document.language,
-        createdAt: document.createdAt,
-        updatedAt: document.updatedAt,
-        durationMs: document.durationMs,
-        segmentCount: document.segments.length,
-        preview: document.segments
-          .map((segment) => segment.text)
-          .join(' ')
-          .slice(0, 140),
-      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .map(toSessionSummary)
   }
 
-  /** Renames a session within the same serialized file operation used by live writes. */
-  public async renameSession(id: string, title: string): Promise<SessionDocument> {
-    const normalizedTitle = title.trim().slice(0, 200)
-    if (!normalizedTitle) throw new Error('Session title cannot be empty.')
-    return this.updateSession(id, (session) => {
-      session.title = normalizedTitle
-      session.isDefaultTitle = false
-      session.updatedAt = new Date().toISOString()
+  /** Attaches one new generation to an empty session. */
+  public async setGeneration(id: string, item: GenerationItem): Promise<SessionDocument> {
+    return this.updateSession(id, (document) => {
+      if (document.item) throw new Error('This session already contains a generation.')
+      document.item = generationItemSchema.parse(item) as GenerationItem
+      const titleSource = item.kind === 'stt' ? item.inputAudio?.originalName : item.prompt.trim()
+      document.title = titleSource?.slice(0, 64) || DEFAULT_SESSION_TITLE
+      document.isDefaultTitle = false
+      document.updatedAt = item.updatedAt
     })
   }
 
-  /** Deletes a session while preserving one non-deletable empty workspace. */
+  /** Replaces the generation after a provider or download lifecycle update. */
+  public async updateGeneration(id: string, item: GenerationItem): Promise<SessionDocument> {
+    return this.updateSession(id, (document) => {
+      if (!document.item || document.item.id !== item.id) {
+        throw new Error('Generation does not belong to this session.')
+      }
+      document.item = generationItemSchema.parse(item) as GenerationItem
+      document.updatedAt = item.updatedAt
+    })
+  }
+
+  /** Renames a history entry while preserving its generation data. */
+  public async renameSession(id: string, title: string): Promise<SessionDocument> {
+    const normalized = title.trim().slice(0, 200)
+    if (!normalized) throw new Error('Session title cannot be empty.')
+    return this.updateSession(id, (document) => {
+      document.title = normalized
+      document.isDefaultTitle = false
+      document.updatedAt = new Date().toISOString()
+    })
+  }
+
+  /** Deletes a terminal session and replaces the last workspace when necessary. */
   public async deleteSession(id: string): Promise<DeleteSessionResult> {
     assertSessionId(id)
-    return this.withFileLock(this.sessionsPath, () => this.deleteSessionUnlocked(id))
-  }
-
-  /** Performs one deletion while holding the workspace-wide history lock. */
-  private async deleteSessionUnlocked(id: string): Promise<DeleteSessionResult> {
-    const sessions = await this.listSessions()
-    const target = sessions.find((session) => session.id === id)
-    if (!target) return { deleted: false }
-    if (sessions.length === 1 && target.segmentCount === 0) return { deleted: false }
-
-    const replacement =
-      sessions.length === 1 ? await this.createSession(target.language) : undefined
-    const filePath = this.sessionPath(id)
-    try {
-      await this.withFileLock(filePath, () => unlink(filePath))
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        if (replacement) await unlink(this.sessionPath(replacement.id)).catch(() => undefined)
-        throw error
+    return this.withLock(this.sessionsPath, async () => {
+      const sessions = await this.listSessions()
+      const target = sessions.find((candidate) => candidate.id === id)
+      if (!target) return { deleted: false }
+      if (
+        target.status === 'submitting' ||
+        target.status === 'pending' ||
+        target.status === 'in_progress'
+      ) {
+        throw new Error('An active generation cannot be deleted.')
       }
-    }
-    return replacement ? { deleted: true, replacement } : { deleted: true }
+      if (sessions.length === 1 && !target.hasItem) return { deleted: false }
+      const replacement = sessions.length === 1 ? await this.createSession() : undefined
+      await unlink(this.sessionPath(id)).catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      })
+      const assetDirectory = this.sessionMediaPath(id)
+      await rm(assetDirectory, { recursive: true, force: true })
+      return replacement ? { deleted: true, replacement } : { deleted: true }
+    })
   }
 
-  /** Reads one session while tolerating malformed history entries. */
-  private async tryReadSession(filePath: string): Promise<SessionDocument | null> {
-    try {
-      return await this.withFileLock(filePath, () => this.readSessionUnlocked(filePath))
-    } catch {
-      return null
+  /** Resolves an asset path only after validating containment in the session media directory. */
+  public resolveAssetPath(sessionId: string, fileName: string): string {
+    assertSessionId(sessionId)
+    if (!fileName || fileName !== fileName.split(/[\\/]/).at(-1)) {
+      throw new Error('Invalid media file name.')
     }
+    const root = resolve(this.sessionMediaPath(sessionId), 'outputs')
+    const candidate = resolve(root, fileName)
+    if (candidate !== root && !candidate.startsWith(`${root}${sep}`)) {
+      throw new Error('Media path escaped its session directory.')
+    }
+    return candidate
   }
 
-  /** Applies one session mutation without allowing another operation to interleave. */
+  /** Resolves one persisted STT input while enforcing containment in its owning session. */
+  public resolveInputPath(sessionId: string, fileName: string): string {
+    assertSessionId(sessionId)
+    if (!fileName || fileName !== fileName.split(/[\\/]/).at(-1)) {
+      throw new Error('Invalid input file name.')
+    }
+    const root = resolve(this.sessionMediaPath(sessionId), 'inputs')
+    const candidate = resolve(root, fileName)
+    if (candidate !== root && !candidate.startsWith(`${root}${sep}`)) {
+      throw new Error('Input path escaped its session directory.')
+    }
+    return candidate
+  }
+
+  /** Resolves a session-owned input directory for copied reference files. */
+  public getSessionInputPath(sessionId: string): string {
+    assertSessionId(sessionId)
+    return join(this.sessionMediaPath(sessionId), 'inputs')
+  }
+
+  /** Resolves a session-owned output directory for generated media. */
+  public getSessionOutputPath(sessionId: string): string {
+    assertSessionId(sessionId)
+    return join(this.sessionMediaPath(sessionId), 'outputs')
+  }
+
+  /** Creates one renderer-safe custom-protocol URL. */
+  public createAssetUrl(sessionId: string, assetId: string): string {
+    assertSessionId(sessionId)
+    if (!z.uuid().safeParse(assetId).success) throw new Error('Invalid asset identifier.')
+    return `aimedia://asset/${sessionId}/${assetId}`
+  }
+
+  /** Applies a serialized document mutation and validates the complete result. */
   private async updateSession(
     id: string,
-    update: (session: SessionDocument) => void,
+    mutate: (document: SessionDocument) => void,
   ): Promise<SessionDocument> {
     assertSessionId(id)
     const filePath = this.sessionPath(id)
-    return this.withFileLock(filePath, async () => {
-      const session = await this.readSessionUnlocked(filePath)
-      update(session)
-      const validated = sessionSchema.parse(session)
-      await this.writeJsonFileUnlocked(filePath, validated)
+    return this.withLock(filePath, async () => {
+      const document = await this.readSessionUnlocked(filePath)
+      mutate(document)
+      const validated = sessionSchema.parse(document) as SessionDocument
+      await this.writeJsonUnlocked(filePath, validated)
       return validated
     })
   }
 
-  /** Validates and writes a complete session document. */
-  private async writeSession(session: SessionDocument): Promise<void> {
-    const validated = sessionSchema.parse(session)
-    await this.writeJsonFile(this.sessionPath(validated.id), validated)
+  /** Writes one complete validated session document. */
+  private async writeSession(document: SessionDocument): Promise<void> {
+    const validated = sessionSchema.parse(document) as SessionDocument
+    await this.withLock(this.sessionPath(validated.id), () =>
+      this.writeJsonUnlocked(this.sessionPath(validated.id), validated),
+    )
   }
 
-  /** Reads a session while its caller owns the file-operation lock. */
+  /** Reads one session only after schema validation. */
   private async readSessionUnlocked(filePath: string): Promise<SessionDocument> {
-    const value: unknown = JSON.parse(await readFile(filePath, 'utf8'))
-    return sessionSchema.parse(migrateSession(value))
+    return sessionSchema.parse(JSON.parse(await readFile(filePath, 'utf8'))) as SessionDocument
   }
 
-  /** Resolves a validated session identifier to its JSON file. */
+  /** Resolves a validated session identifier to its JSON document. */
   private sessionPath(id: string): string {
     return join(this.sessionsPath, `${id}.json`)
   }
 
-  /** Serializes and writes one JSON value directly to its destination file. */
-  private async writeJsonFile(filePath: string, value: unknown): Promise<void> {
-    await this.withFileLock(filePath, () => this.writeJsonFileUnlocked(filePath, value))
+  /** Resolves a validated session identifier to its private media directory. */
+  private sessionMediaPath(id: string): string {
+    assertSessionId(id)
+    return join(this.mediaPath, id)
   }
 
-  /** Writes one complete JSON payload while its caller owns the file-operation lock. */
-  private async writeJsonFileUnlocked(filePath: string, value: unknown): Promise<void> {
+  /** Serializes a complete JSON value without temporary plaintext artifacts. */
+  private async writeJsonUnlocked(filePath: string, value: unknown): Promise<void> {
     await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
   }
 
-  /** Runs one operation after every earlier operation targeting the same file. */
-  private async withFileLock<T>(filePath: string, operation: () => Promise<T>): Promise<T> {
-    const previous = this.fileOperationTails.get(filePath) ?? Promise.resolve()
+  /** Orders operations targeting the same durable resource. */
+  private async withLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.operationTails.get(key) ?? Promise.resolve()
     let release = (): void => undefined
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
+    const gate = new Promise<void>((resolveGate) => {
+      release = resolveGate
     })
     const tail = previous.catch(() => undefined).then(() => gate)
-    this.fileOperationTails.set(filePath, tail)
+    this.operationTails.set(key, tail)
     await previous.catch(() => undefined)
     try {
       return await operation()
     } finally {
       release()
-      if (this.fileOperationTails.get(filePath) === tail) this.fileOperationTails.delete(filePath)
+      if (this.operationTails.get(key) === tail) this.operationTails.delete(key)
     }
-  }
-
-  /** Removes only obsolete temporary files created by pre-v3 direct-write builds. */
-  private async removeObsoleteTemporaryFiles(directoryPath: string): Promise<void> {
-    const entries = await readdir(directoryPath, { withFileTypes: true })
-    await Promise.allSettled(
-      entries
-        .filter((entry) => entry.isFile() && entry.name.endsWith('.tmp'))
-        .map((entry) => unlink(join(directoryPath, entry.name))),
-    )
   }
 }

@@ -355,3 +355,51 @@
     width: 210px;
   }
 }
+
+@media (max-width: 760px) {
+  .menu {
+    width: 156px;
+    flex-basis: 156px;
+    padding-inline: 7px;
+  }
+
+  .menuItem {
+    gap: 7px;
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+
+  .settingContainer {
+    padding-inline: 12px;
+  }
+
+  .settingRow {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .settingControl {
+    max-width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .compactControl,
+  .wideControl {
+    width: 100%;
+  }
+
+  .credentialRow .flexControl {
+    flex: 1 1 100%;
+  }
+
+  .apiCreditNotice {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .apiCreditLink {
+    margin-left: 20px;
+  }
+}

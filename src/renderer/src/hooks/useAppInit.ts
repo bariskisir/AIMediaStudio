@@ -1,19 +1,12 @@
 /**
- * Bootstraps renderer state and binds all main-to-renderer lifecycle events.
+ * Bootstraps renderer state and binds generation lifecycle events.
  */
 
 import { useEffect, useRef } from 'react'
 import { App as AntdApp } from 'antd'
 import i18n from '@renderer/i18n'
 import { createLogger } from '@renderer/services/LoggerService'
-import {
-  hydrate,
-  receiveTranscriptResult,
-  receiveTranslationResult,
-  setPage,
-  setSessionState,
-  setUpdateState,
-} from '@renderer/store/appSlice'
+import { hydrate, receiveSessionUpdated, setPage, setUpdateState } from '@renderer/store/appSlice'
 import { useAppDispatch } from '@renderer/store'
 
 const logger = createLogger('AppInit')
@@ -31,23 +24,14 @@ export const useAppInit = (): void => {
   useEffect(() => {
     let active = true
     const cleanup = [
-      window.app.onSessionState((event) => dispatch(setSessionState(event))),
-      window.app.onTranscriptResult((event) => dispatch(receiveTranscriptResult(event))),
-      window.app.onTranslationResult((event) => dispatch(receiveTranslationResult(event))),
+      window.app.onSessionUpdated((event) => dispatch(receiveSessionUpdated(event))),
       window.app.onUpdateState((event) => dispatch(setUpdateState(event))),
       window.app.onSettingsOpenRequested(() => dispatch(setPage('settings'))),
       window.app.onError((event) => {
         logger.error('Main process reported an application error.', event.message)
-        void messageRef.current.error(
-          i18n.t(
-            event.context === 'translation' ? 'errors.translationDetails' : 'errors.runtimeDetails',
-            { details: event.message },
-          ),
-          8,
-        )
+        void messageRef.current.error(event.message, 8)
       }),
     ]
-
     void window.app
       .bootstrap()
       .then(async (payload) => {
@@ -60,7 +44,6 @@ export const useAppInit = (): void => {
         logger.error('Renderer bootstrap failed.', error)
         void messageRef.current.error(i18n.t('errors.generic'))
       })
-
     return () => {
       active = false
       cleanup.forEach((unsubscribe) => {

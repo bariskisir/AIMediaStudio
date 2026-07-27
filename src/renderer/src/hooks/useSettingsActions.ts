@@ -1,29 +1,27 @@
 /**
- * Exposes renderer commands for persisted settings and transcription credentials.
+ * Exposes persisted settings and independently scoped OpenRouter credential commands.
  */
 
 import { useCallback } from 'react'
 import { App as AntdApp } from 'antd'
 import { useTranslation } from 'react-i18next'
-import type { AppSettingsPatch } from '@shared/types'
-import type { TranscriptionProvider } from '@shared/transcription'
+import type { AppSettingsPatch, MediaKind } from '@shared/types'
 import i18n from '@renderer/i18n'
 import { createLogger } from '@renderer/services/LoggerService'
 import SettingsPersistenceQueue from '@renderer/services/SettingsPersistenceQueue'
-import { useAppDispatch, useAppSelector } from '@renderer/store'
-import { setApiBalance, setHasApiKey, setSettings } from '@renderer/store/appSlice'
+import { useAppDispatch } from '@renderer/store'
+import { setApiBalance, setHasApiKey, setModels, setSettings } from '@renderer/store/appSlice'
 
 const logger = createLogger('SettingsActions')
 const settingsPersistenceQueue = new SettingsPersistenceQueue()
 
-/** Returns stable settings and credential commands backed by the preload API. */
+/** Returns stable settings, catalog, and credential commands. */
 export const useSettingsActions = () => {
   const dispatch = useAppDispatch()
-  const currentSessionId = useAppSelector((state) => state.app.currentSession?.id ?? null)
   const { message } = AntdApp.useApp()
   const { t } = useTranslation()
 
-  /** Serializes a partial settings update so rapid controls cannot overwrite each other. */
+  /** Serializes sparse settings writes so rapid controls remain ordered. */
   const saveSettings = useCallback(
     async (patch: AppSettingsPatch): Promise<void> => {
       try {
@@ -31,61 +29,45 @@ export const useSettingsActions = () => {
         dispatch(setSettings(saved))
         document.documentElement.lang = saved.uiLanguage
         await i18n.changeLanguage(saved.uiLanguage)
-        if (
-          (patch.translationEnabled !== undefined ||
-            patch.translationTargetLanguage !== undefined ||
-            patch.translationProvider !== undefined) &&
-          currentSessionId
-        ) {
-          try {
-            await window.app.translateSession(
-              currentSessionId,
-              saved.translationEnabled,
-              saved.translationProvider,
-              saved.translationTargetLanguage,
-            )
-          } catch (error) {
-            logger.error('Transcript translation could not be scheduled.', error)
-            void message.error(t('errors.generic'))
-          }
-        }
       } catch (error) {
         logger.error('Settings could not be saved.', error)
         void message.error(t('errors.generic'))
       }
     },
-    [currentSessionId, dispatch, message, t],
+    [dispatch, message, t],
   )
 
-  /** Verifies and saves one transcription provider API key. */
+  /** Verifies one key, updates its scope, and reflects any newly seeded empty scopes. */
   const saveApiKey = useCallback(
-    async (provider: TranscriptionProvider, apiKey: string): Promise<boolean> => {
+    async (kind: MediaKind, apiKey: string): Promise<boolean> => {
       try {
-        const balance = await window.app.saveApiKey(provider, apiKey)
-        dispatch(setHasApiKey({ provider, available: true }))
-        dispatch(setApiBalance({ provider, balance }))
+        const result = await window.app.saveApiKey({ kind, provider: 'openrouter' }, apiKey)
+        for (const updatedKind of result.updatedKinds) {
+          dispatch(setHasApiKey({ kind: updatedKind, available: true }))
+          dispatch(setApiBalance({ kind: updatedKind, balance: result.balance }))
+        }
         void message.success(t('notices.apiKeySaved'))
         return true
       } catch (error) {
-        logger.error('Transcription API key validation failed.', error)
-        void message.error(t('errors.generic'))
+        logger.error('OpenRouter API key validation failed.', error)
+        void message.error(error instanceof Error ? error.message : t('errors.generic'))
         return false
       }
     },
     [dispatch, message, t],
   )
 
-  /** Removes one encrypted provider key and clears its credential state. */
+  /** Removes one encrypted credential without affecting the other media mode. */
   const deleteApiKey = useCallback(
-    async (provider: TranscriptionProvider): Promise<boolean> => {
+    async (kind: MediaKind): Promise<boolean> => {
       try {
-        await window.app.deleteApiKey(provider)
-        dispatch(setHasApiKey({ provider, available: false }))
-        dispatch(setApiBalance({ provider, balance: [] }))
+        await window.app.deleteApiKey({ kind, provider: 'openrouter' })
+        dispatch(setHasApiKey({ kind, available: false }))
+        dispatch(setApiBalance({ kind, balance: [] }))
         void message.success(t('notices.apiKeyRemoved'))
         return true
       } catch (error) {
-        logger.error('Transcription API key could not be removed.', error)
+        logger.error('OpenRouter API key could not be removed.', error)
         void message.error(t('errors.generic'))
         return false
       }
@@ -93,18 +75,31 @@ export const useSettingsActions = () => {
     [dispatch, message, t],
   )
 
-  /** Refreshes optional account balance data without surfacing unsupported accounts. */
+  /** Refreshes one independently authenticated balance. */
   const refreshApiBalance = useCallback(
-    async (provider: TranscriptionProvider): Promise<void> => {
+    async (kind: MediaKind): Promise<void> => {
       try {
-        dispatch(setApiBalance({ provider, balance: await window.app.getApiBalance(provider) }))
+        const balance = await window.app.getApiBalance({ kind, provider: 'openrouter' })
+        dispatch(setApiBalance({ kind, balance }))
       } catch (error) {
-        logger.warn('Transcription provider balance could not be refreshed.', error)
-        dispatch(setApiBalance({ provider, balance: [] }))
+        logger.warn('OpenRouter balance could not be refreshed.', error)
       }
     },
     [dispatch],
   )
 
-  return { deleteApiKey, refreshApiBalance, saveApiKey, saveSettings }
+  /** Refreshes one public model catalog without touching saved credentials. */
+  const refreshModels = useCallback(
+    async (kind: MediaKind): Promise<void> => {
+      try {
+        dispatch(setModels({ kind, models: await window.app.getModels(kind, true) }))
+      } catch (error) {
+        logger.warn('OpenRouter model catalog could not be refreshed.', error)
+        void message.error(t('errors.generic'))
+      }
+    },
+    [dispatch, message, t],
+  )
+
+  return { deleteApiKey, refreshApiBalance, refreshModels, saveApiKey, saveSettings }
 }

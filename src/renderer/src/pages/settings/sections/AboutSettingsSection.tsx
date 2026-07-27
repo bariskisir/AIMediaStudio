@@ -12,7 +12,7 @@ import { useAppSelector } from '@renderer/store'
 import SettingLabel from '../components/SettingLabel'
 import styles from '../SettingsPage.module.scss'
 
-/** Displays reusable application metadata and Transcript-specific links. */
+/** Displays reusable application metadata and project links. */
 const AboutSettingsSection = (): React.JSX.Element => {
   const version = useAppSelector((state) => state.app.version)
   const desktopActions = useDesktopActions()

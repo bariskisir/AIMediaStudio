@@ -1,5 +1,5 @@
 /**
- * Renders the persistent Transcript sidebar and global window controls.
+ * Renders persistent application navigation and global window controls.
  */
 
 import type { AppSettingsPatch } from '@shared/types'

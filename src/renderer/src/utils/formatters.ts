@@ -1,50 +1,77 @@
 /**
- * Provides consistent formatting helpers for transcript timestamps and summaries.
+ * Provides consistent date, price, and history formatting helpers.
  */
 
-import type { TimeFormat, SessionDocument, SessionSummary } from '@shared/types'
+import {
+  getComparablePriceAmount,
+  isCharacterPrice,
+  isTokenPrice,
+  type ModelPrice,
+} from '@shared/openrouter'
+import type { SessionDocument, SessionSummary, TimeFormat } from '@shared/types'
 
-/** Formats elapsed milliseconds as mm:ss or hh:mm:ss. */
-export const formatDuration = (milliseconds: number): string => {
-  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000))
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  const parts = [minutes.toString().padStart(2, '0'), seconds.toString().padStart(2, '0')]
-  if (hours > 0) parts.unshift(hours.toString().padStart(2, '0'))
-  return parts.join(':')
-}
-
-/** Formats a stored ISO date as DD.MM.YYYY with the preferred 12- or 24-hour clock. */
+/** Formats a stored ISO date with the preferred 12- or 24-hour clock. */
 export const formatDate = (isoDate: string, timeFormat: TimeFormat): string => {
   const date = new Date(isoDate)
-  const day = date.getDate().toString().padStart(2, '0')
-  const month = (date.getMonth() + 1).toString().padStart(2, '0')
-  const year = String(date.getFullYear()).slice(2)
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  const localHours = date.getHours()
-
-  if (timeFormat === '12-hour') {
-    const hours = (localHours % 12 || 12).toString().padStart(2, '0')
-    const period = localHours >= 12 ? 'PM' : 'AM'
-    return `${day}.${month}.${year} ${hours}:${minutes} ${period}`
-  }
-
-  return `${day}.${month}.${year} ${localHours.toString().padStart(2, '0')}:${minutes}`
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    hour12: timeFormat === '12-hour',
+  }).format(date)
 }
 
-/** Converts a complete session into a compact history summary. */
+/** Formats native media prices directly and token prices per one million tokens. */
+export const formatModelPrice = (
+  price: ModelPrice | null,
+  translateUnit?: (key: string) => string,
+): string => {
+  if (!price) return translateUnit?.('pricing.unavailable') ?? 'Pricing unavailable'
+  const amount = getComparablePriceAmount(price)
+  const fallbackUnit = isCharacterPrice(price)
+    ? '1M characters'
+    : isTokenPrice(price)
+      ? price.unit.toLocaleLowerCase('en-US').includes('video')
+        ? '1M video tokens'
+        : price.unit.toLocaleLowerCase('en-US').includes('input')
+          ? '1M input tokens'
+          : price.unit.toLocaleLowerCase('en-US').includes('output')
+            ? '1M output tokens'
+            : '1M tokens'
+      : price.unit
+  const unitKey = isCharacterPrice(price)
+    ? 'pricing.characters'
+    : isTokenPrice(price)
+      ? price.unit.toLocaleLowerCase('en-US').includes('video')
+        ? 'pricing.videoTokens'
+        : price.unit.toLocaleLowerCase('en-US').includes('input')
+          ? 'pricing.inputTokens'
+          : price.unit.toLocaleLowerCase('en-US').includes('output')
+            ? 'pricing.outputTokens'
+            : 'pricing.tokens'
+      : price.unit.toLocaleLowerCase('en-US').includes('image')
+        ? 'pricing.image'
+        : price.unit.toLocaleLowerCase('en-US') === 'second'
+          ? 'pricing.second'
+          : price.unit.toLocaleLowerCase('en-US') === 'hour'
+            ? 'pricing.hour'
+            : `pricing.${price.unit}`
+  const unit = translateUnit?.(unitKey) ?? fallbackUnit
+  const variant = price.variant ? ` · ${price.variant}` : ''
+  return `$${amount.toLocaleString(undefined, { maximumFractionDigits: 6 })} / ${unit}${variant}`
+}
+
+/** Converts one complete generation session to compact history metadata. */
 export const toSessionSummary = (session: SessionDocument): SessionSummary => ({
   id: session.id,
   title: session.title,
   isDefaultTitle: session.isDefaultTitle,
-  language: session.language,
   createdAt: session.createdAt,
   updatedAt: session.updatedAt,
-  durationMs: session.durationMs,
-  segmentCount: session.segments.length,
-  preview: session.segments
-    .map((segment) => segment.text)
-    .join(' ')
-    .slice(0, 140),
+  hasItem: session.item !== null,
+  ...(session.item ? { mediaKind: session.item.kind, status: session.item.status } : {}),
+  preview:
+    (session.item?.kind === 'stt'
+      ? session.item.resultText || session.item.inputAudio?.originalName
+      : session.item?.prompt
+    )?.slice(0, 140) ?? '',
 })

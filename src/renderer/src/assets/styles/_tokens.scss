@@ -1,4 +1,4 @@
-/* Defines Transcript semantic color tokens for dark and light themes. */
+/* Defines AI Media Studio semantic color tokens for dark and light themes. */
 
 :root,
 body[theme-mode='dark'] {
@@ -25,10 +25,6 @@ body[theme-mode='dark'] {
   --modal-background: #1b1b1b;
   --navbar-background: #1f1f1f;
   --list-item-radius: 10px;
-  --transcript-microphone: #56a8ff;
-  --transcript-speaker: #a78bfa;
-  --color-translation: #52c58b;
-  --color-translation-mute: #52c58b24;
 }
 
 body[theme-mode='light'] {
@@ -54,8 +50,4 @@ body[theme-mode='light'] {
   --color-warning: #d89614;
   --modal-background: #ffffff;
   --navbar-background: #f4f4f4;
-  --transcript-microphone: #1677ff;
-  --transcript-speaker: #7c3aed;
-  --color-translation: #178a55;
-  --color-translation-mute: #178a551a;
 }

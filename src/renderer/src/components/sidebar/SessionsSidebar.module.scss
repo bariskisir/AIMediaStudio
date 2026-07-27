@@ -131,6 +131,14 @@
   font-size: 9px;
 }
 
+.statusTag {
+  width: fit-content;
+  margin: 4px 0 0;
+  padding-inline: 5px;
+  font-size: 8px;
+  line-height: 15px;
+}
+
 .deleteButton {
   flex: 0 0 28px;
   margin-right: 3px;
@@ -153,8 +161,8 @@
 
 @media (max-width: 980px) {
   .container {
-    width: 205px;
-    flex-basis: 205px;
+    width: 160px;
+    flex-basis: 160px;
   }
 
   .container.collapsed {
