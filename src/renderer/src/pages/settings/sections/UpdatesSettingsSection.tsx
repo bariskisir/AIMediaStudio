@@ -3,7 +3,7 @@
  */
 
 import { Button, Progress, Switch } from 'antd'
-import { RefreshCw } from 'lucide-react'
+import { ExternalLink, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { UpdateStateEvent } from '@shared/types'
 import { useDesktopActions } from '@renderer/hooks/useDesktopActions'
@@ -67,6 +67,17 @@ const UpdatesSettingsSection = (): React.JSX.Element => {
                 onClick={() => void desktopActions.installUpdate()}
               >
                 {t('settings.installNow')}
+              </Button>
+            ) : update.state === 'available' && update.pageUrl ? (
+              <Button
+                type="primary"
+                {...(light ? { ghost: true as const } : {})}
+                icon={<ExternalLink size={14} />}
+                onClick={() => {
+                  if (update.pageUrl) void desktopActions.openExternal(update.pageUrl)
+                }}
+              >
+                {t('settings.openDownloadPage')}
               </Button>
             ) : (
               <Button

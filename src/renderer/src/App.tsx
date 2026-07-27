@@ -17,6 +17,9 @@ import { useAppSelector } from '@renderer/store'
 
 const SettingsPage = lazy(() => import('@renderer/pages/settings/SettingsPage'))
 
+const showUpdateNotice = (update: { state: string; pageUrl?: string }) =>
+  update.state === 'downloaded' || (update.state === 'available' && update.pageUrl !== undefined)
+
 /** Renders application pages after main-process bootstrap completes. */
 const App = (): React.JSX.Element => {
   useAppInit()
@@ -54,12 +57,26 @@ const App = (): React.JSX.Element => {
           )}
         </div>
       </div>
-      {update.state === 'downloaded' && (
+      {showUpdateNotice(update) && (
         <div className={styles.updateNotice}>
           <Download size={15} />
-          <span>{t('settings.readyToInstall', { version: update.version })}</span>
-          <Button size="small" type="primary" onClick={() => void desktopActions.installUpdate()}>
-            {t('settings.installNow')}
+          <span>
+            {update.state === 'downloaded'
+              ? t('settings.readyToInstall', { version: update.version })
+              : t('settings.updateAvailable', { version: update.version })}
+          </span>
+          <Button
+            size="small"
+            type="primary"
+            onClick={() =>
+              update.state === 'downloaded'
+                ? void desktopActions.installUpdate()
+                : update.pageUrl && void desktopActions.openExternal(update.pageUrl)
+            }
+          >
+            {update.state === 'downloaded'
+              ? t('settings.installNow')
+              : t('settings.openDownloadPage')}
           </Button>
         </div>
       )}

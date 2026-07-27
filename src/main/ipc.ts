@@ -188,6 +188,10 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
       services.catalog.getModels('stt').catch(() => []),
     ])
     window.webContents.setZoomFactor(settings.pageZoom)
+    if (process.platform === 'linux') {
+      settings.showTrayIcon = false
+      settings.minimizeToTrayOnClose = false
+    }
     let sessions = await services.storage.listSessions()
     if (!sessions.length) await services.storage.createSession()
     sessions = await services.storage.listSessions()
@@ -206,7 +210,12 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
 
   ipcMain.handle(IpcChannel.SettingsSave, async (event, input: unknown) => {
     assertSender(event.sender)
-    const settings = await services.storage.updateSettings(settingsPatchSchema.parse(input))
+    const patch = settingsPatchSchema.parse(input)
+    if (process.platform === 'linux') {
+      delete patch.showTrayIcon
+      delete patch.minimizeToTrayOnClose
+    }
+    const settings = await services.storage.updateSettings(patch)
     window.setAlwaysOnTop(settings.alwaysOnTop)
     window.webContents.setZoomFactor(settings.pageZoom)
     services.tray.applySettings(settings)

@@ -440,6 +440,7 @@ export interface UpdateStateEvent {
   percent?: number
   releaseNotes?: string
   message?: string
+  pageUrl?: string
 }
 
 /** Exposes the complete capability-limited bridge to the sandboxed renderer. */

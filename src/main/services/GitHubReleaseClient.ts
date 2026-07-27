@@ -77,7 +77,7 @@ export const isNewerVersion = (candidate: string, installed: string): boolean =>
 /** Maps Electron's architecture identifier to the release asset naming convention. */
 const getReleaseArchitecture = (architecture: NodeJS.Architecture): 'x64' | 'arm64' => {
   if (architecture === 'x64' || architecture === 'arm64') return architecture
-  throw new Error(`Application updates are not available for ${architecture} Windows builds.`)
+  throw new Error(`Application updates are not available for ${architecture} builds.`)
 }
 
 /** Locates the exact setup executable produced for the current Windows architecture. */
@@ -214,7 +214,13 @@ export default class GitHubReleaseClient {
 
   /** Rejects asset names and URLs that could escape the expected GitHub release boundary. */
   private assertTrustedAsset(asset: GitHubReleaseAsset): void {
-    if (basename(asset.name) !== asset.name || !asset.name.toLowerCase().endsWith('-setup.exe')) {
+    if (
+      basename(asset.name) !== asset.name ||
+      !(
+        asset.name.toLowerCase().endsWith('-setup.exe') ||
+        asset.name.toLowerCase().endsWith('.appimage')
+      )
+    ) {
       throw new Error('GitHub returned an invalid update asset name.')
     }
     let downloadUrl: URL

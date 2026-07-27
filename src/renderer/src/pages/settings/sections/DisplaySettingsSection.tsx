@@ -14,6 +14,7 @@ import styles from '../SettingsPage.module.scss'
 /** Displays theme and primary navbar placement controls. */
 const DisplaySettingsSection = (): React.JSX.Element => {
   const settings = useAppSelector((state) => state.app.settings)
+  const platform = useAppSelector((state) => state.app.platform)
   const settingsActions = useSettingsActions()
   const { t } = useTranslation()
 
@@ -170,7 +171,13 @@ const DisplaySettingsSection = (): React.JSX.Element => {
             description={t('settings.showTrayIconDescription')}
           />
           <div className={styles.settingControl}>
-            <Switch checked={settings.showTrayIcon} onChange={changeTrayIcon} />
+            <Tooltip title={platform === 'linux' ? t('settings.trayUnavailable') : undefined}>
+              <Switch
+                checked={settings.showTrayIcon}
+                disabled={platform === 'linux'}
+                onChange={changeTrayIcon}
+              />
+            </Tooltip>
           </div>
         </div>
         <div className={styles.settingRow}>
@@ -179,7 +186,13 @@ const DisplaySettingsSection = (): React.JSX.Element => {
             description={t('settings.minimizeToTrayOnCloseDescription')}
           />
           <div className={styles.settingControl}>
-            <Switch checked={settings.minimizeToTrayOnClose} onChange={changeMinimizeToTray} />
+            <Tooltip title={platform === 'linux' ? t('settings.trayUnavailable') : undefined}>
+              <Switch
+                checked={settings.minimizeToTrayOnClose}
+                disabled={platform === 'linux'}
+                onChange={changeMinimizeToTray}
+              />
+            </Tooltip>
           </div>
         </div>
       </section>

@@ -20,6 +20,7 @@ export interface UpdateRuntime {
   isPackaged: boolean
   version: string
   architecture: NodeJS.Architecture
+  platform: NodeJS.Platform
   temporaryDirectory: string
   quit(): void
   launchInstaller(filePath: string): Promise<void>
@@ -52,6 +53,7 @@ const createRuntime = (): UpdateRuntime => ({
   isPackaged: app.isPackaged,
   version: app.getVersion(),
   architecture: process.arch,
+  platform: process.platform,
   temporaryDirectory: join(app.getPath('temp'), app.name, 'Updates'),
   quit: () => app.quit(),
   launchInstaller,
@@ -100,6 +102,15 @@ export default class AppUpdater {
       const release = await this.client.getLatestRelease()
       if (!isNewerVersion(release.version, this.runtime.version)) {
         this.emit({ state: 'up-to-date', version: this.runtime.version })
+        return
+      }
+      if (this.runtime.platform === 'linux') {
+        this.emit({
+          state: 'available',
+          version: release.version,
+          pageUrl: release.pageUrl,
+          ...(release.releaseNotes ? { releaseNotes: release.releaseNotes } : {}),
+        })
         return
       }
       if (!this.runtime.isPackaged) {
