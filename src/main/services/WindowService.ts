@@ -2,15 +2,31 @@
  * Owns the hardened Electron window and renderer navigation boundary.
  */
 
+import { readFile } from 'node:fs/promises'
+import { renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, screen } from 'electron'
 import { isTrustedRendererNavigation } from '../security/RendererNavigationPolicy'
+import {
+  fitWindowBoundsToDisplays,
+  parsePersistedWindowState,
+  type PersistedWindowState,
+} from '../windowState'
 import type LoggerService from './LoggerService'
 import type MediaProtocolService from './MediaProtocolService'
 
 export default class WindowService {
   private mainWindow: BrowserWindow | null = null
   private readonly rendererPath = join(__dirname, '../renderer/index.html')
+  private readonly statePath: string
+  private state: PersistedWindowState | null = null
+  private stateSaveTimer: ReturnType<typeof setTimeout> | null = null
+  private logger: LoggerService | null = null
+
+  /** Creates a window owner that persists shell state in the durable application data directory. */
+  public constructor(dataRoot: string) {
+    this.statePath = join(dataRoot, 'window-state.json')
+  }
 
   /** Returns the active main window when it is still alive. */
   public getMainWindow(): BrowserWindow | null {
@@ -22,9 +38,16 @@ export default class WindowService {
     logger: LoggerService,
     mediaProtocol: MediaProtocolService,
   ): Promise<BrowserWindow> {
+    this.logger = logger
+    const storedState = await this.loadWindowState()
+    const restoredBounds = storedState
+      ? fitWindowBoundsToDisplays(
+          storedState.bounds,
+          screen.getAllDisplays().map((display) => display.workArea),
+        )
+      : null
     const window = new BrowserWindow({
-      width: 1200,
-      height: 800,
+      ...(restoredBounds ?? { width: 1200, height: 800 }),
       minWidth: 720,
       minHeight: 520,
       fullscreenable: true,
@@ -51,15 +74,90 @@ export default class WindowService {
       },
     })
     this.mainWindow = window
+    this.state = {
+      revision: 1,
+      bounds: restoredBounds ?? window.getBounds(),
+      maximized: storedState?.maximized ?? false,
+      fullScreen: storedState?.fullScreen ?? false,
+    }
     mediaProtocol.attach(window.webContents.session)
     this.configureDiagnostics(window, logger)
     this.configureSecurity(window)
-    window.once('ready-to-show', () => window.show())
+    this.configureWindowStatePersistence(window)
+    window.once('ready-to-show', () => {
+      if (storedState?.fullScreen) window.setFullScreen(true)
+      else if (storedState?.maximized) window.maximize()
+      window.show()
+    })
     window.once('closed', () => {
+      if (this.stateSaveTimer) clearTimeout(this.stateSaveTimer)
+      this.stateSaveTimer = null
       if (this.mainWindow === window) this.mainWindow = null
     })
     await this.loadRenderer(window)
     return window
+  }
+
+  /** Loads the last valid window state without preventing startup after read or parse failures. */
+  private async loadWindowState(): Promise<PersistedWindowState | null> {
+    try {
+      return parsePersistedWindowState(
+        JSON.parse(await readFile(this.statePath, 'utf8')) as unknown,
+      )
+    } catch {
+      return null
+    }
+  }
+
+  /** Tracks normal bounds, maximized state, and native fullscreen state for later launches. */
+  private configureWindowStatePersistence(window: BrowserWindow): void {
+    window.on('move', () => this.scheduleWindowStateSave(window))
+    window.on('resize', () => this.scheduleWindowStateSave(window))
+    window.on('maximize', () => this.scheduleWindowStateSave(window))
+    window.on('unmaximize', () => this.scheduleWindowStateSave(window))
+    window.on('enter-full-screen', () => this.scheduleWindowStateSave(window))
+    window.on('leave-full-screen', () => this.scheduleWindowStateSave(window))
+    window.on('close', () => {
+      if (this.stateSaveTimer) clearTimeout(this.stateSaveTimer)
+      this.stateSaveTimer = null
+      this.captureWindowState(window)
+      this.persistWindowState()
+    })
+  }
+
+  /** Debounces frequent move and resize events before saving the latest state. */
+  private scheduleWindowStateSave(window: BrowserWindow): void {
+    this.captureWindowState(window)
+    if (this.stateSaveTimer) clearTimeout(this.stateSaveTimer)
+    this.stateSaveTimer = setTimeout(() => {
+      this.stateSaveTimer = null
+      this.captureWindowState(window)
+      this.persistWindowState()
+    }, 250)
+  }
+
+  /** Captures normal bounds while retaining them when maximized or fullscreen. */
+  private captureWindowState(window: BrowserWindow): void {
+    if (window.isDestroyed()) return
+    const maximized = window.isMaximized()
+    const fullScreen = window.isFullScreen()
+    const bounds =
+      maximized || fullScreen
+        ? (this.state?.bounds ?? window.getNormalBounds())
+        : window.getBounds()
+    this.state = { revision: 1, bounds, maximized, fullScreen }
+  }
+
+  /** Atomically writes the small window-state document so close events cannot lose a last move. */
+  private persistWindowState(): void {
+    if (!this.state) return
+    const temporaryPath = `${this.statePath}.tmp`
+    try {
+      writeFileSync(temporaryPath, `${JSON.stringify(this.state, null, 2)}\n`, 'utf8')
+      renameSync(temporaryPath, this.statePath)
+    } catch (error) {
+      this.logger?.warn('WindowService', 'Window state could not be persisted.', error)
+    }
   }
 
   /** Records renderer failures without logging private generation prompts. */

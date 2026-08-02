@@ -1,6 +1,6 @@
 {
   "name": "aimediastudio",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Secure OpenRouter image, video, TTS, and STT desktop application",
   "main": "./out/main/index.js",
   "author": "bariskisir",
