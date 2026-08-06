@@ -1,9 +1,24 @@
-# AI Media Studio
+<p align="center">
+  <img src="build/icon.png" alt="AI Media Studio logo" width="88">
+</p>
 
-AI Media Studio is an Electron desktop application for generating images, videos, speech, and transcriptions.
+<h1 align="center">AI Media Studio</h1>
 
-![AIMediaStudio interface](images/interface.png)
-![AIMediaStudio interface](images/interface2.png)
+<p align="center">
+  Generate images, videos, speech, and transcriptions.
+</p>
+
+<p align="center">
+  <a href="https://github.com/bariskisir/AIMediaStudio/actions/workflows/release.yml"><img src="https://github.com/bariskisir/AIMediaStudio/actions/workflows/release.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/bariskisir/AIMediaStudio/releases/latest"><img src="https://img.shields.io/github/v/release/bariskisir/AIMediaStudio" alt="Latest release"></a>
+  <a href="https://github.com/bariskisir/AIMediaStudio/releases"><img src="https://img.shields.io/github/downloads/bariskisir/AIMediaStudio/total" alt="Total downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <img src="images/interface.png" alt="AI Media Studio interface" width="840">
+  <img src="images/interface2.png" alt="AI Media Studio interface" width="840">
+</p>
 
 ---
 
