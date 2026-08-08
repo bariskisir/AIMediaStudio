@@ -84,6 +84,7 @@ export default {
     display: '화면',
     displaySettings: '화면 설정',
     updates: '업데이트',
+    telemetry: '원격 분석',
     logging: '로깅',
     about: '정보',
     alwaysOnTop: '항상 위에 표시',
@@ -132,6 +133,9 @@ export default {
     installNow: '설치 및 다시 시작',
     openDownloadPage: '다운로드 페이지 열기',
     releaseNotes: '릴리스 노트',
+    telemetryCollection: '익명 사용 현황 원격 분석 공유',
+    telemetryDescription:
+      '활성 사용자 수를 집계하기 위해 애플리케이션 시작 시 익명 설치 ID, 버전, 플랫폼 및 인터페이스 언어를 전송합니다. Microsoft는 연결 IP에서 대략적인 국가와 도시를 추정합니다. 생성된 미디어 콘텐츠는 전송하지 않습니다.',
     updateError: '업데이트 확인에 실패했습니다.',
     version: '버전 {{version}}',
     author: '제작자',

@@ -3,6 +3,7 @@
  */
 
 import {
+  Activity,
   AudioLines,
   Film,
   Image,
@@ -22,6 +23,7 @@ import GeneralSettingsSection from './sections/GeneralSettingsSection'
 import ImageSettingsSection from './sections/ImageSettingsSection'
 import LoggingSettingsSection from './sections/LoggingSettingsSection'
 import SpeechToTextSettingsSection from './sections/SpeechToTextSettingsSection'
+import TelemetrySettingsSection from './sections/TelemetrySettingsSection'
 import TextToSpeechSettingsSection from './sections/TextToSpeechSettingsSection'
 import UpdatesSettingsSection from './sections/UpdatesSettingsSection'
 import VideoSettingsSection from './sections/VideoSettingsSection'
@@ -40,6 +42,7 @@ const SettingsPage = (): React.JSX.Element => {
     { key: 'tts', label: t('settings.media.tts'), icon: <Volume2 size={17} /> },
     { key: 'stt', label: t('settings.media.stt'), icon: <AudioLines size={17} /> },
     { key: 'updates', label: t('settings.updates'), icon: <RefreshCw size={17} /> },
+    { key: 'telemetry', label: t('settings.telemetry'), icon: <Activity size={17} /> },
     { key: 'logging', label: t('settings.logging'), icon: <ScrollText size={17} /> },
     { key: 'about', label: t('settings.about'), icon: <Info size={17} /> },
   ]
@@ -52,6 +55,7 @@ const SettingsPage = (): React.JSX.Element => {
     if (section === 'tts') return <TextToSpeechSettingsSection />
     if (section === 'stt') return <SpeechToTextSettingsSection />
     if (section === 'updates') return <UpdatesSettingsSection />
+    if (section === 'telemetry') return <TelemetrySettingsSection />
     if (section === 'logging') return <LoggingSettingsSection />
     if (section === 'about') return <AboutSettingsSection />
     return <GeneralSettingsSection />

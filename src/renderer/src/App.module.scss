@@ -34,14 +34,20 @@
 
 .loadingScreen {
   width: 100%;
-  height: 100%;
+  height: 100dvh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 14px;
   color: var(--color-text-3);
   background: var(--color-background);
   font-size: 12px;
+}
+
+.loadingLogo {
+  width: 64px;
+  height: 64px;
 }
 
 .updateNotice {

@@ -95,6 +95,7 @@ const settingsFieldsSchema = z.object({
   showTrayIcon: z.boolean(),
   minimizeToTrayOnClose: z.boolean(),
   autoUpdate: z.boolean(),
+  telemetryEnabled: z.boolean(),
   logLevel: z.enum(LOG_LEVELS),
 })
 

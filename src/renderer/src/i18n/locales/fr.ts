@@ -85,6 +85,7 @@ export default {
     display: 'Affichage',
     displaySettings: "Paramètres d'affichage",
     updates: 'Mises à jour',
+    telemetry: 'Télémétrie',
     logging: 'Journalisation',
     about: 'À propos',
     alwaysOnTop: 'Toujours au premier plan',
@@ -134,6 +135,9 @@ export default {
     installNow: 'Installer et redémarrer',
     openDownloadPage: 'Ouvrir la page de téléchargement',
     releaseNotes: 'Notes de version',
+    telemetryCollection: "Partager les données d'utilisation anonymes",
+    telemetryDescription:
+      "Au démarrage de l'application, un identifiant d'installation anonyme, la version, la plateforme et la langue de l'interface sont envoyés pour compter les utilisateurs actifs. Microsoft déduit un pays et une ville approximatifs de l'adresse IP de connexion. Aucun contenu multimédia généré n'est envoyé.",
     updateError: 'Échec de la vérification des mises à jour.',
     version: 'Version {{version}}',
     author: 'Auteur',

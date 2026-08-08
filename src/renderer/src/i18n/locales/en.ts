@@ -84,6 +84,7 @@ export default {
     display: 'Display',
     displaySettings: 'Display Settings',
     updates: 'Updates',
+    telemetry: 'Telemetry',
     logging: 'Logging',
     about: 'About',
     alwaysOnTop: 'Always on top',
@@ -132,6 +133,9 @@ export default {
     installNow: 'Install and restart',
     openDownloadPage: 'Open download page',
     releaseNotes: 'Release notes',
+    telemetryCollection: 'Share anonymous usage telemetry',
+    telemetryDescription:
+      'At application startup, an anonymous installation ID, version, platform, and interface locale are sent to count active users. Microsoft derives an approximate country and city from the connection IP. No generated media content is sent.',
     updateError: 'Update check failed.',
     version: 'Version {{version}}',
     author: 'Author',

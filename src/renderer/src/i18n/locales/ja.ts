@@ -84,6 +84,7 @@ export default {
     display: '表示',
     displaySettings: '表示設定',
     updates: 'アップデート',
+    telemetry: 'テレメトリ',
     logging: 'ログ',
     about: 'について',
     alwaysOnTop: '常に最前面',
@@ -132,6 +133,9 @@ export default {
     installNow: 'インストールして再起動',
     openDownloadPage: 'ダウンロードページを開く',
     releaseNotes: 'リリースノート',
+    telemetryCollection: '匿名の利用状況テレメトリを共有',
+    telemetryDescription:
+      'アクティブユーザー数を把握するため、アプリケーションの起動時に匿名のインストールID、バージョン、プラットフォーム、インターフェース言語を送信します。Microsoft は接続元IPからおおよその国と都市を推定します。生成されたメディアコンテンツは送信されません。',
     updateError: 'アップデート確認に失敗しました。',
     version: 'バージョン {{version}}',
     author: '作者',

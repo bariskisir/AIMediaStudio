@@ -85,6 +85,7 @@ export default {
     display: 'Pantalla',
     displaySettings: 'Ajustes de Pantalla',
     updates: 'Actualizaciones',
+    telemetry: 'Telemetría',
     logging: 'Registro',
     about: 'Acerca de',
     alwaysOnTop: 'Siempre visible',
@@ -134,6 +135,9 @@ export default {
     installNow: 'Instalar y reiniciar',
     openDownloadPage: 'Abrir página de descarga',
     releaseNotes: 'Notas de la versión',
+    telemetryCollection: 'Compartir telemetría de uso anónima',
+    telemetryDescription:
+      'Al iniciar la aplicación se envían un identificador de instalación anónimo, la versión, la plataforma y el idioma de la interfaz para contar usuarios activos. Microsoft obtiene un país y una ciudad aproximados a partir de la IP de conexión. No se envía contenido multimedia generado.',
     updateError: 'Falló la verificación de actualización.',
     version: 'Versión {{version}}',
     author: 'Autor',

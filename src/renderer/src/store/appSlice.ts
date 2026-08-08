@@ -18,7 +18,16 @@ import {
 
 export type AppPage = 'home' | 'settings'
 export type SettingsSection =
-  'general' | 'display' | 'image' | 'video' | 'tts' | 'stt' | 'updates' | 'about' | 'logging'
+  | 'general'
+  | 'display'
+  | 'image'
+  | 'video'
+  | 'tts'
+  | 'stt'
+  | 'updates'
+  | 'telemetry'
+  | 'about'
+  | 'logging'
 
 export interface AppState {
   initialized: boolean

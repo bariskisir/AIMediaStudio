@@ -85,6 +85,7 @@ export default {
     display: 'Anzeige',
     displaySettings: 'Anzeigeeinstellungen',
     updates: 'Updates',
+    telemetry: 'Telemetrie',
     logging: 'Protokollierung',
     about: 'Über',
     alwaysOnTop: 'Immer im Vordergrund',
@@ -134,6 +135,9 @@ export default {
     installNow: 'Installieren und neu starten',
     openDownloadPage: 'Download-Seite öffnen',
     releaseNotes: 'Versionshinweise',
+    telemetryCollection: 'Anonyme Nutzungstelemetrie teilen',
+    telemetryDescription:
+      'Beim Start der Anwendung werden eine anonyme Installations-ID, Version, Plattform und Oberflächensprache gesendet, um aktive Nutzer zu zählen. Microsoft leitet aus der Verbindungs-IP ein ungefähres Land und eine Stadt ab. Generierte Medieninhalte werden nicht gesendet.',
     updateError: 'Update-Prüfung fehlgeschlagen.',
     version: 'Version {{version}}',
     author: 'Autor',

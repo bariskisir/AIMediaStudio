@@ -84,6 +84,7 @@ export default {
     display: 'Exibição',
     displaySettings: 'Configurações de Exibição',
     updates: 'Atualizações',
+    telemetry: 'Telemetria',
     logging: 'Registro',
     about: 'Sobre',
     alwaysOnTop: 'Sempre no topo',
@@ -133,6 +134,9 @@ export default {
     installNow: 'Instalar e reiniciar',
     openDownloadPage: 'Abrir página de download',
     releaseNotes: 'Notas da versão',
+    telemetryCollection: 'Partilhar telemetria de utilização anónima',
+    telemetryDescription:
+      'Ao iniciar a aplicação, são enviados um identificador de instalação anónimo, a versão, a plataforma e o idioma da interface para contar utilizadores ativos. A Microsoft obtém um país e uma cidade aproximados a partir do IP da ligação. Não são enviados conteúdos multimédia gerados.',
     updateError: 'Falha na verificação de atualização.',
     version: 'Versão {{version}}',
     author: 'Autor',

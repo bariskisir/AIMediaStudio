@@ -85,6 +85,7 @@ export default {
     display: 'Görünüm',
     displaySettings: 'Görünüm Ayarları',
     updates: 'Güncellemeler',
+    telemetry: 'Telemetri',
     logging: 'Günlükleme',
     about: 'Hakkında',
     alwaysOnTop: 'Her zaman üstte',
@@ -134,6 +135,9 @@ export default {
     installNow: 'Yükle ve yeniden başlat',
     openDownloadPage: 'İndirme sayfasını aç',
     releaseNotes: 'Sürüm notları',
+    telemetryCollection: 'Anonim kullanım telemetrisini paylaş',
+    telemetryDescription:
+      'Etkin kullanıcı sayısını takip etmek için uygulama açılışında anonim bir kurulum kimliği, sürüm, platform ve arayüz dili gönderilir. Microsoft bağlantı IP adresinden yaklaşık ülke ve şehir bilgisini türetir. Üretilen medya içeriği gönderilmez.',
     updateError: 'Güncelleme denetimi başarısız.',
     version: 'Sürüm {{version}}',
     author: 'Yazar',
