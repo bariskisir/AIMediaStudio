@@ -16,6 +16,12 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/TypeScript-7.0-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Electron-43.2-47848F?logo=electron&logoColor=white" alt="Electron">
+  <img src="https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=black" alt="React">
+</p>
+
+<p align="center">
   <img src="images/interface.png" alt="AI Media Studio interface" width="840">
   <img src="images/interface2.png" alt="AI Media Studio interface" width="840">
 </p>
