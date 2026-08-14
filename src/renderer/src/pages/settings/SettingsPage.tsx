@@ -7,6 +7,7 @@ import {
   AudioLines,
   Film,
   Image,
+  Inbox,
   Info,
   Monitor,
   RefreshCw,
@@ -19,6 +20,7 @@ import { useAppDispatch, useAppSelector } from '@renderer/store'
 import { setSettingsSection, type SettingsSection } from '@renderer/store/appSlice'
 import AboutSettingsSection from './sections/AboutSettingsSection'
 import DisplaySettingsSection from './sections/DisplaySettingsSection'
+import TraySettingsSection from './sections/TraySettingsSection'
 import GeneralSettingsSection from './sections/GeneralSettingsSection'
 import ImageSettingsSection from './sections/ImageSettingsSection'
 import LoggingSettingsSection from './sections/LoggingSettingsSection'
@@ -37,6 +39,7 @@ const SettingsPage = (): React.JSX.Element => {
   const menu: Array<{ key: SettingsSection; label: string; icon: React.JSX.Element }> = [
     { key: 'general', label: t('settings.general'), icon: <Settings2 size={17} /> },
     { key: 'display', label: t('settings.display'), icon: <Monitor size={17} /> },
+    { key: 'tray', label: t('settings.tray'), icon: <Inbox size={17} /> },
     { key: 'image', label: t('settings.media.image'), icon: <Image size={17} /> },
     { key: 'video', label: t('settings.media.video'), icon: <Film size={17} /> },
     { key: 'tts', label: t('settings.media.tts'), icon: <Volume2 size={17} /> },
@@ -50,6 +53,7 @@ const SettingsPage = (): React.JSX.Element => {
   /** Resolves the active category without retaining inactive credentials in component state. */
   const renderSection = (): React.JSX.Element => {
     if (section === 'display') return <DisplaySettingsSection />
+    if (section === 'tray') return <TraySettingsSection />
     if (section === 'image') return <ImageSettingsSection />
     if (section === 'video') return <VideoSettingsSection />
     if (section === 'tts') return <TextToSpeechSettingsSection />

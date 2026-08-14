@@ -101,12 +101,16 @@ export default {
     zoomIn: 'Yakınlaştır',
     resetZoom: 'Ölçeği sıfırla',
     traySettings: 'Tepsi Ayarları',
+    tray: 'Sistem Tepsisi',
     trayUnavailable: 'Yalnızca Windows',
     showTrayIcon: 'Tepsi simgesini göster',
     showTrayIconDescription: "AI Media Studio'yu sistem tepsisinde göster.",
     minimizeToTrayOnClose: 'Kapatınca tepsiye küçült',
     minimizeToTrayOnCloseDescription:
       'Pencere kapatıldığında uygulamadan çıkmak yerine sistem tepsisine gizle.',
+    startMinimized: 'Küçültülmüş başlat',
+    startMinimizedDescription:
+      'Uygulamayı pencereyi göstermek yerine sistem tepsisinde gizli olarak başlatın.',
     interfaceLanguage: 'Arayüz dili',
     interfaceLanguageDescription: 'Uygulama görüntüleme dilini değiştirin.',
     timeFormat: 'Saat biçimi',

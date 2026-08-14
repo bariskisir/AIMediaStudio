@@ -77,4 +77,28 @@ describe('media settings schema', () => {
       }).success,
     ).toBe(false)
   })
+
+  it('rejects minimized startup without a visible tray icon', () => {
+    expect(
+      settingsSchema.safeParse({
+        ...DEFAULT_SETTINGS,
+        showTrayIcon: false,
+        startMinimized: true,
+      }).success,
+    ).toBe(false)
+  })
+
+  it('accepts minimized startup when the tray icon is enabled', () => {
+    expect(
+      settingsSchema.safeParse({
+        ...DEFAULT_SETTINGS,
+        showTrayIcon: true,
+        startMinimized: true,
+      }).success,
+    ).toBe(true)
+  })
+
+  it('accepts a minimized startup patch', () => {
+    expect(settingsPatchSchema.safeParse({ startMinimized: true }).success).toBe(true)
+  })
 })

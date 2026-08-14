@@ -2,7 +2,7 @@
  * Renders application appearance and navbar layout preferences.
  */
 
-import { Button, Segmented, Switch, Tooltip } from 'antd'
+import { Button, Segmented, Tooltip } from 'antd'
 import { Minus, Monitor, Moon, PanelLeft, PanelTop, Plus, RotateCcw, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { PAGE_ZOOM_LIMITS, type NavbarPosition, type ThemeMode } from '@shared/types'
@@ -14,7 +14,6 @@ import styles from '../SettingsPage.module.scss'
 /** Displays theme and primary navbar placement controls. */
 const DisplaySettingsSection = (): React.JSX.Element => {
   const settings = useAppSelector((state) => state.app.settings)
-  const platform = useAppSelector((state) => state.app.platform)
   const settingsActions = useSettingsActions()
   const { t } = useTranslation()
 
@@ -25,22 +24,6 @@ const DisplaySettingsSection = (): React.JSX.Element => {
       Math.max(PAGE_ZOOM_LIMITS.min, Number((settings.pageZoom + delta).toFixed(1))),
     )
     void settingsActions.saveSettings({ pageZoom })
-  }
-
-  /** Keeps close-to-tray disabled whenever its required tray icon is removed. */
-  const changeTrayIcon = (showTrayIcon: boolean): void => {
-    void settingsActions.saveSettings({
-      showTrayIcon,
-      ...(showTrayIcon ? {} : { minimizeToTrayOnClose: false }),
-    })
-  }
-
-  /** Enables the required tray icon when close-to-tray is selected. */
-  const changeMinimizeToTray = (minimizeToTrayOnClose: boolean): void => {
-    void settingsActions.saveSettings({
-      minimizeToTrayOnClose,
-      ...(minimizeToTrayOnClose ? { showTrayIcon: true } : {}),
-    })
   }
 
   return (
@@ -158,39 +141,6 @@ const DisplaySettingsSection = (): React.JSX.Element => {
                 onClick={() =>
                   void settingsActions.saveSettings({ pageZoom: PAGE_ZOOM_LIMITS.default })
                 }
-              />
-            </Tooltip>
-          </div>
-        </div>
-      </section>
-      <h2 className={styles.groupTitle}>{t('settings.traySettings')}</h2>
-      <section className={styles.settingGroup}>
-        <div className={styles.settingRow}>
-          <SettingLabel
-            title={t('settings.showTrayIcon')}
-            description={t('settings.showTrayIconDescription')}
-          />
-          <div className={styles.settingControl}>
-            <Tooltip title={platform === 'linux' ? t('settings.trayUnavailable') : undefined}>
-              <Switch
-                checked={settings.showTrayIcon}
-                disabled={platform === 'linux'}
-                onChange={changeTrayIcon}
-              />
-            </Tooltip>
-          </div>
-        </div>
-        <div className={styles.settingRow}>
-          <SettingLabel
-            title={t('settings.minimizeToTrayOnClose')}
-            description={t('settings.minimizeToTrayOnCloseDescription')}
-          />
-          <div className={styles.settingControl}>
-            <Tooltip title={platform === 'linux' ? t('settings.trayUnavailable') : undefined}>
-              <Switch
-                checked={settings.minimizeToTrayOnClose}
-                disabled={platform === 'linux'}
-                onChange={changeMinimizeToTray}
               />
             </Tooltip>
           </div>

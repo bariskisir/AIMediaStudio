@@ -99,6 +99,7 @@ src/
     │       └── sections/
     │           ├── GeneralSettingsSection.tsx
     │           ├── DisplaySettingsSection.tsx
+    │           ├── TraySettingsSection.tsx
     │           ├── ImageSettingsSection.tsx
     │           ├── VideoSettingsSection.tsx
     │           ├── TextToSpeechSettingsSection.tsx
@@ -136,8 +137,8 @@ tests/                                  # Vitest test files (19 tests)
 ├── Speech.test.ts
 ├── StorageService.test.ts
 └── TrayService.test.ts
-vite.config.ts                          # Main + preload + renderer Vite build
-vitest.config.ts                        # Test config with path aliases
+vite.config.mts                        # Main + preload + renderer Vite build
+vitest.config.mts                      # Test config with path aliases
 tsconfig.json                           # Root config referencing node + web projects
 tsconfig.node.json                      # Main/preload/tests TS config (ES2023, NodeNext)
 tsconfig.web.json                       # Renderer TS config (ES2022, Bundler, JSX)
@@ -272,7 +273,7 @@ Every exported class, function, interface, and type alias has a JSDoc comment. F
 ## Testing
 
 - **Runner**: Vitest 4.1 with `environment: 'node'` (no jsdom needed for most tests, though jsdom is available as a dev dependency).
-- **Path aliases**: Tests use the same `@main`, `@shared`, `@renderer` aliases as the source, configured in `vitest.config.ts`.
+- **Path aliases**: Tests use the same `@main`, `@shared`, `@renderer` aliases as the source, configured in `vitest.config.mts`.
 - **Test categories**:
   - **Unit**: Pure logic tests (`IpcChannel.test.ts`, `GenerationStatus.test.ts`, `MediaRange.test.ts`, `Speech.test.ts`, `SettingsPersistenceQueue.test.ts`, `ModelSettings.test.ts`).
   - **Redux**: State transition tests (`AppSlice.test.ts`).

@@ -89,8 +89,8 @@ export default class TrayService {
   /** Restores and focuses the application from either tray interaction. */
   private showWindow(): void {
     if (this.window.isDestroyed()) return
-    if (this.window.isMinimized()) this.window.restore()
     this.window.show()
+    if (this.window.isMinimized()) this.window.restore()
     this.window.focus()
   }
 

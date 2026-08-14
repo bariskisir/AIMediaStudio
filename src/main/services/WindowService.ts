@@ -37,6 +37,7 @@ export default class WindowService {
   public async createWindow(
     logger: LoggerService,
     mediaProtocol: MediaProtocolService,
+    startMinimized = false,
   ): Promise<BrowserWindow> {
     this.logger = logger
     const storedState = await this.loadWindowState()
@@ -87,7 +88,8 @@ export default class WindowService {
     window.once('ready-to-show', () => {
       if (storedState?.fullScreen) window.setFullScreen(true)
       else if (storedState?.maximized) window.maximize()
-      window.show()
+      if (startMinimized) window.hide()
+      else window.show()
     })
     window.once('closed', () => {
       if (this.stateSaveTimer) clearTimeout(this.stateSaveTimer)

@@ -20,6 +20,7 @@ export type AppPage = 'home' | 'settings'
 export type SettingsSection =
   | 'general'
   | 'display'
+  | 'tray'
   | 'image'
   | 'video'
   | 'tts'

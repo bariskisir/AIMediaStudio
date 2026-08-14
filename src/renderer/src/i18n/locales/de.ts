@@ -101,12 +101,16 @@ export default {
     zoomIn: 'Vergrößern',
     resetZoom: 'Zoom zurücksetzen',
     traySettings: 'Taskleisten-Einstellungen',
+    tray: 'Taskleiste',
     trayUnavailable: 'Windows only',
     showTrayIcon: 'Taskleistensymbol anzeigen',
     showTrayIconDescription: 'AI Media Studio in der Taskleiste anzeigen.',
     minimizeToTrayOnClose: 'Beim Schließen in die Taskleiste minimieren',
     minimizeToTrayOnCloseDescription:
       'Das Fenster in der Taskleiste verstecken, anstatt die Anwendung zu beenden.',
+    startMinimized: 'Minimiert starten',
+    startMinimizedDescription:
+      'Startet die Anwendung in der Taskleiste ausgeblendet, ohne das Fenster anzuzeigen.',
     interfaceLanguage: 'Oberflächensprache',
     interfaceLanguageDescription: 'Ändern Sie die Anzeigesprache der Anwendung.',
     timeFormat: 'Zeitformat',

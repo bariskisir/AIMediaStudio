@@ -101,12 +101,16 @@ export default {
     zoomIn: 'Zoom avant',
     resetZoom: 'Réinitialiser le zoom',
     traySettings: "Paramètres de la barre d'état",
+    tray: "Barre d'état",
     trayUnavailable: 'Windows only',
     showTrayIcon: "Afficher l'icône dans la barre d'état",
     showTrayIconDescription: "Afficher AI Media Studio dans la barre d'état système.",
     minimizeToTrayOnClose: "Réduire dans la barre d'état à la fermeture",
     minimizeToTrayOnCloseDescription:
       "Masquer la fenêtre dans la barre d'état au lieu de quitter l'application.",
+    startMinimized: 'Démarrer réduit',
+    startMinimizedDescription:
+      "Démarrez l'application cachée dans la barre d'état au lieu d'afficher sa fenêtre.",
     interfaceLanguage: "Langue de l'interface",
     interfaceLanguageDescription: "Modifiez la langue d'affichage de l'application.",
     timeFormat: "Format de l'heure",

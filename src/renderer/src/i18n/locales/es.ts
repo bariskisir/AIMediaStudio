@@ -101,12 +101,16 @@ export default {
     zoomIn: 'Acercar',
     resetZoom: 'Restablecer zoom',
     traySettings: 'Ajustes de Bandeja',
+    tray: 'Bandeja',
     trayUnavailable: 'Windows only',
     showTrayIcon: 'Mostrar icono en la bandeja',
     showTrayIconDescription: 'Mostrar AI Media Studio en la bandeja del sistema.',
     minimizeToTrayOnClose: 'Minimizar a la bandeja al cerrar',
     minimizeToTrayOnCloseDescription:
       'Ocultar la ventana en la bandeja del sistema en lugar de salir de la aplicación.',
+    startMinimized: 'Iniciar minimizado',
+    startMinimizedDescription:
+      'Inicia la aplicación oculta en la bandeja en lugar de mostrar su ventana.',
     interfaceLanguage: 'Idioma de la interfaz',
     interfaceLanguageDescription: 'Cambie el idioma de visualización de la aplicación.',
     timeFormat: 'Formato de hora',
