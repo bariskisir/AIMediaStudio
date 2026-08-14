@@ -15,8 +15,14 @@ const electronMocks = vi.hoisted(() => {
     public static instances: MockBrowserWindow[] = []
     public readonly options: unknown
     private readonly eventListeners = new Map<string, () => void>()
-    public readonly show = vi.fn()
-    public readonly hide = vi.fn()
+    private visible = false
+    public readonly show = vi.fn(() => {
+      this.visible = true
+    })
+    public readonly hide = vi.fn(() => {
+      this.visible = false
+    })
+    public readonly isVisible = vi.fn(() => this.visible)
     public readonly minimize = vi.fn()
     public readonly maximize = vi.fn()
     public readonly restore = vi.fn()
@@ -32,7 +38,13 @@ const electronMocks = vi.hoisted(() => {
     public readonly loadURL = vi.fn(async () => undefined)
     public readonly webContents = {
       id: 1,
-      on: vi.fn(),
+      eventListeners: new Map<string, () => void>(),
+      on: (event: string, listener: () => void) => {
+        this.webContents.eventListeners.set(event, listener)
+      },
+      emit: (event: string) => {
+        this.webContents.eventListeners.get(event)?.()
+      },
       setWindowOpenHandler: vi.fn(),
       session: {
         setPermissionRequestHandler: vi.fn(),
@@ -161,5 +173,54 @@ describe('WindowService', () => {
 
     expect(window?.setFullScreen).toHaveBeenCalledWith(true)
     expect(window?.show).toHaveBeenCalledOnce()
+  })
+
+  it('reveals the window through the load fallback when ready-to-show never fires', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new WindowService(dataRoot)
+      await service.createWindow(createLogger(), createMediaProtocol())
+      const window = electronMocks.MockBrowserWindow.instances[0]
+
+      window?.webContents.emit('did-finish-load')
+      vi.advanceTimersByTime(250)
+
+      expect(window?.show).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the window hidden when minimized startup is enabled and ready-to-show never fires', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new WindowService(dataRoot)
+      await service.createWindow(createLogger(), createMediaProtocol(), true)
+      const window = electronMocks.MockBrowserWindow.instances[0]
+
+      window?.webContents.emit('did-finish-load')
+      vi.advanceTimersByTime(250)
+
+      expect(window?.show).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not re-reveal a window that was already shown by ready-to-show', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new WindowService(dataRoot)
+      await service.createWindow(createLogger(), createMediaProtocol())
+      const window = electronMocks.MockBrowserWindow.instances[0]
+
+      window?.emit('ready-to-show')
+      window?.webContents.emit('did-finish-load')
+      vi.advanceTimersByTime(250)
+
+      expect(window?.show).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

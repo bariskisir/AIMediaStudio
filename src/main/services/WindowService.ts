@@ -15,6 +15,9 @@ import {
 import type LoggerService from './LoggerService'
 import type MediaProtocolService from './MediaProtocolService'
 
+/** Fallback that reveals the window when the ready-to-show event never fires. */
+const REVEAL_WINDOW_FALLBACK_MS = 250
+
 export default class WindowService {
   private mainWindow: BrowserWindow | null = null
   private readonly rendererPath = join(__dirname, '../renderer/index.html')
@@ -85,12 +88,19 @@ export default class WindowService {
     this.configureDiagnostics(window, logger)
     this.configureSecurity(window)
     this.configureWindowStatePersistence(window)
+    const revealWindow = (): void => {
+      if (window.isDestroyed() || window.isVisible()) return
+      if (startMinimized) window.hide()
+      else window.show()
+    }
     window.once('ready-to-show', () => {
       if (storedState?.fullScreen) window.setFullScreen(true)
       else if (storedState?.maximized) window.maximize()
-      if (startMinimized) window.hide()
-      else window.show()
+      revealWindow()
     })
+    window.webContents.on('did-finish-load', () =>
+      setTimeout(revealWindow, REVEAL_WINDOW_FALLBACK_MS),
+    )
     window.once('closed', () => {
       if (this.stateSaveTimer) clearTimeout(this.stateSaveTimer)
       this.stateSaveTimer = null
