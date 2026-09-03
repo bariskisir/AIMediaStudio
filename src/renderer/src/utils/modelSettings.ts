@@ -45,9 +45,16 @@ export const getCapabilityRange = (
   return descriptor?.type === 'range' ? { min: descriptor.min, max: descriptor.max } : fallback
 }
 
-/** Orders native per-image or per-second prices first, then secondary billing units by price. */
+/** Returns true when the model title advertises a free tier, case-insensitively. */
+export const isFreeModel = (model: MediaModel): boolean =>
+  model.name.toLocaleLowerCase('en-US').includes('free')
+
+/** Orders free-titled models first, then native per-image or per-second prices by price. */
 export const sortModelsByOutputPrice = (models: MediaModel[]): MediaModel[] =>
   [...models].sort((left, right) => {
+    const leftFree = isFreeModel(left) ? 0 : 1
+    const rightFree = isFreeModel(right) ? 0 : 1
+    if (leftFree !== rightFree) return leftFree - rightFree
     const leftPrice = getDisplayPrice(left)
     const rightPrice = getDisplayPrice(right)
     const leftPriority = leftPrice
