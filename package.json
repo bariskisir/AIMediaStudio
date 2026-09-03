@@ -1,6 +1,6 @@
 {
   "name": "aimediastudio",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Secure OpenRouter image, video, TTS, and STT desktop application",
   "main": "./out/main/index.js",
   "author": "bariskisir",
@@ -30,33 +30,33 @@
   },
   "dependencies": {
     "electron-log": "5.4.4",
-    "zod": "4.4.3"
+    "zod": "4.5.4"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.7",
+    "@biomejs/biome": "2.5.12",
     "@reduxjs/toolkit": "2.12.0",
     "@resvg/resvg-js": "2.6.2",
-    "@types/node": "26.2.0",
+    "@types/node": "26.4.1",
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.4",
-    "@vitejs/plugin-react": "6.0.5",
-    "antd": "6.5.4",
+    "@types/react-dom": "19.2.6",
+    "@vitejs/plugin-react": "6.1.1",
+    "antd": "6.6.2",
     "electron": "43.3.0",
     "electron-builder": "26.15.3",
-    "i18next": "26.3.6",
+    "i18next": "26.4.1",
     "jsdom": "30.0.1",
-    "lucide-react": "1.30.0",
+    "lucide-react": "1.40.0",
     "prettier": "3.9.6",
     "png-to-ico": "3.0.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "react-i18next": "17.0.11",
+    "react-i18next": "17.0.13",
     "react-redux": "9.3.0",
-    "sass": "1.102.0",
+    "sass": "1.103.1",
     "typescript": "7.0.2",
-    "vite": "8.2.1",
-    "vite-plugin-electron": "1.1.1",
-    "vitest": "4.1.10"
+    "vite": "8.2.2",
+    "vite-plugin-electron": "1.1.2",
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": ">=24.0.0"
