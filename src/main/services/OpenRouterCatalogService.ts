@@ -15,6 +15,7 @@ import {
   type ModelPrice,
 } from '@shared/openrouter'
 import { z } from 'zod'
+import { httpFetch } from '../http/http.fetch'
 import type LoggerService from './LoggerService'
 
 const descriptorSchema = z.union([
@@ -150,7 +151,7 @@ export default class OpenRouterCatalogService {
   public constructor(
     dataRoot: string,
     private readonly logger: LoggerService,
-    private readonly fetcher: Fetcher = globalThis.fetch,
+    private readonly fetcher: Fetcher = httpFetch,
   ) {
     this.cachePath = join(dataRoot, 'openrouter-models.json')
   }

@@ -17,6 +17,7 @@ import type {
   VideoGenerationOptions,
 } from '@shared/types'
 import { z } from 'zod'
+import { httpFetch } from '../http/http.fetch'
 
 const imageResponseSchema = z.object({
   data: z.array(
@@ -153,7 +154,7 @@ const wait = async (milliseconds: number): Promise<void> =>
 
 export default class OpenRouterMediaService {
   /** Creates an API client with injectable Fetch transport for unit tests. */
-  public constructor(private readonly fetcher: Fetcher = globalThis.fetch) {}
+  public constructor(private readonly fetcher: Fetcher = httpFetch) {}
 
   /** Sends one non-streaming image request and returns only final buffered images. */
   public async generateImage(

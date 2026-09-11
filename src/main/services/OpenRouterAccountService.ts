@@ -4,6 +4,7 @@
 
 import type { ApiBalance } from '@shared/types'
 import { z } from 'zod'
+import { httpFetch } from '../http/http.fetch'
 
 const creditsSchema = z.object({
   data: z.object({
@@ -29,7 +30,7 @@ export default class OpenRouterAccountService {
 
   /** Fetches total credits and usage, then calculates the remaining USD value. */
   private async fetchBalance(apiKey: string): Promise<ApiBalance> {
-    const response = await fetch('https://openrouter.ai/api/v1/credits', {
+    const response = await httpFetch('https://openrouter.ai/api/v1/credits', {
       headers: { Authorization: `Bearer ${apiKey}` },
     })
     if (!response.ok) throw new Error('OpenRouter rejected the API key.')

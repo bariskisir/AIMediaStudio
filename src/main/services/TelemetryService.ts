@@ -5,6 +5,7 @@ import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AppLocale } from '@shared/types'
 import { z } from 'zod'
+import { httpFetch } from '../http/http.fetch'
 
 const APPLICATION_INSIGHTS_CONNECTION_STRING =
   'InstrumentationKey=57d6037c-32f2-4e33-8afc-9bca358e1edc;IngestionEndpoint=https://northeurope-2.in.applicationinsights.azure.com/;LiveEndpoint=https://northeurope.livediagnostics.monitor.azure.com/;ApplicationId=ff3ae8d8-26c5-4100-ab92-7eb53497d2bf'
@@ -62,7 +63,7 @@ export default class TelemetryService {
   /** Creates the telemetry sender without enabling any automatic data collection. */
   public constructor(
     dataRoot: string,
-    private readonly fetcher: TelemetryFetcher = fetch,
+    private readonly fetcher: TelemetryFetcher = httpFetch,
   ) {
     this.identityPath = join(dataRoot, 'telemetry.json')
   }

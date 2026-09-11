@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { MediaAsset } from '@shared/types'
+import { httpFetch } from '../http/http.fetch'
 import type StorageService from './StorageService'
 
 const MIME_EXTENSIONS: Record<string, string> = {
@@ -56,7 +57,7 @@ export default class MediaAssetService {
     apiKey: string,
     index: number,
   ): Promise<MediaAsset> {
-    const response = await fetch(url, {
+    const response = await httpFetch(url, {
       ...(url.startsWith('https://openrouter.ai/')
         ? { headers: { Authorization: `Bearer ${apiKey}` } }
         : {}),

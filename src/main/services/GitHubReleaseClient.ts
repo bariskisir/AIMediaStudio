@@ -7,6 +7,7 @@ import { mkdir, open, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { z } from 'zod'
 import { APP_REPO } from '@shared/appInfo'
+import { httpFetch } from '../http/http.fetch'
 
 const RELEASES_API_URL = `https://api.github.com/repos/${APP_REPO}/releases/latest`
 const GITHUB_ORIGIN = 'https://github.com'
@@ -99,7 +100,7 @@ export default class GitHubReleaseClient {
   private latestReleaseRequest: Promise<GitHubRelease> | null = null
 
   /** Creates a release client with an injectable Fetch implementation for deterministic tests. */
-  public constructor(private readonly fetcher: Fetcher = globalThis.fetch) {}
+  public constructor(private readonly fetcher: Fetcher = httpFetch) {}
 
   /** Retrieves and validates the latest public, stable GitHub release. */
   public async getLatestRelease(): Promise<GitHubRelease> {
