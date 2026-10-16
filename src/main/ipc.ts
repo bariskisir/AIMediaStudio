@@ -37,6 +37,7 @@ import type OpenRouterCatalogService from './services/OpenRouterCatalogService'
 import type ReferenceImageService from './services/ReferenceImageService'
 import type StorageService from './services/StorageService'
 import type TrayService from './services/TrayService'
+import type WindowService from './services/WindowService'
 
 const mediaKindSchema = z.enum(MEDIA_KINDS)
 const credentialScopeSchema = z.object({ kind: mediaKindSchema, provider: z.literal('openrouter') })
@@ -119,6 +120,7 @@ const rendererLogSchema = z.object({
   message: z.string().trim().min(1).max(1_000),
   details: z.string().max(8_000).optional(),
 })
+const sidebarStateSchema = z.object({ open: z.boolean() })
 
 const TRUSTED_EXTERNAL_ORIGINS = new Set([
   'https://openrouter.ai',
@@ -138,6 +140,7 @@ interface IpcServices {
   tray: TrayService
   updater: AppUpdater
   logger: LoggerService
+  windowService: WindowService
 }
 
 /** Removes prior handlers before a replacement macOS window is attached. */
@@ -204,6 +207,7 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
       currentSession: await services.storage.getSession(first.id),
       hasApiKeys: { image: imageKey, video: videoKey, tts: ttsKey, stt: sttKey },
       models: { image: imageModels, video: videoModels, tts: ttsModels, stt: sttModels },
+      sidebar: services.windowService.getSidebarState(),
       platform: process.platform,
       version: app.getVersion(),
     }
@@ -367,6 +371,10 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
   ipcMain.handle(IpcChannel.WindowIsMaximized, (event) => {
     assertSender(event.sender)
     return window.isMaximized()
+  })
+  ipcMain.handle(IpcChannel.WindowSidebarStateSet, (event, input: unknown) => {
+    assertSender(event.sender)
+    services.windowService.setSidebarState(sidebarStateSchema.parse(input))
   })
   ipcMain.handle(IpcChannel.ThemeSet, (event, input: unknown) => {
     assertSender(event.sender)

@@ -405,6 +405,12 @@ export interface DeleteSessionResult {
   replacement?: SessionDocument
 }
 
+/** Stores the collapsible sessions sidebar state persisted with window geometry. */
+export interface SidebarState {
+  /** Whether the sessions sidebar is expanded. */
+  open: boolean
+}
+
 /** Hydrates the renderer with durable state and public model catalogs. */
 export interface BootstrapPayload {
   settings: AppSettings
@@ -412,6 +418,7 @@ export interface BootstrapPayload {
   currentSession: SessionDocument
   hasApiKeys: Record<MediaKind, boolean>
   models: Record<MediaKind, MediaModel[]>
+  sidebar: SidebarState | null
   platform: DesktopPlatform
   version: string
 }
@@ -474,6 +481,7 @@ export interface AIMediaStudioApi {
   toggleMaximizeWindow(): Promise<boolean>
   closeWindow(): Promise<void>
   isWindowMaximized(): Promise<boolean>
+  setSidebarState(state: SidebarState): Promise<void>
   setTheme(theme: Exclude<ThemeMode, 'system'>): Promise<void>
   openExternal(url: string): Promise<void>
   openLogsDirectory(): Promise<void>

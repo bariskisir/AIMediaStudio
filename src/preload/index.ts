@@ -46,6 +46,7 @@ const api: AIMediaStudioApi = {
   toggleMaximizeWindow: () => ipcRenderer.invoke(IpcChannel.WindowToggleMaximize),
   closeWindow: () => ipcRenderer.invoke(IpcChannel.WindowClose),
   isWindowMaximized: () => ipcRenderer.invoke(IpcChannel.WindowIsMaximized),
+  setSidebarState: (state) => ipcRenderer.invoke(IpcChannel.WindowSidebarStateSet, state),
   setTheme: (theme) => ipcRenderer.invoke(IpcChannel.ThemeSet, theme),
   openExternal: (url) => ipcRenderer.invoke(IpcChannel.ShellOpenExternal, url),
   openLogsDirectory: () => ipcRenderer.invoke(IpcChannel.LogsOpenDirectory),

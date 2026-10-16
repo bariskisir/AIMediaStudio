@@ -79,6 +79,7 @@ const appSlice = createSlice({
         sessions: action.payload.sessions,
         currentSession: action.payload.currentSession,
       })
+      if (action.payload.sidebar) state.sessionsSidebarOpen = action.payload.sidebar.open
     },
     /** Opens one top-level application page. */
     setPage(state, action: PayloadAction<AppPage>) {

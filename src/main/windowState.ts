@@ -2,6 +2,7 @@
  * Validates persisted desktop-window state and restores bounds only on connected displays.
  */
 
+import type { SidebarState } from '@shared/types'
 import { z } from 'zod'
 
 /** Describes one rectangular desktop region in physical Electron coordinates. */
@@ -12,12 +13,14 @@ export interface WindowBounds {
   height: number
 }
 
-/** Stores the last normal bounds and native display mode of the main window. */
+/** Stores the last normal bounds, native display mode, and sessions sidebar state. */
 export interface PersistedWindowState {
   revision: 1
   bounds: WindowBounds
   maximized: boolean
   fullScreen: boolean
+  /** Older documents predate sidebar persistence and remain valid when absent. */
+  sidebar?: SidebarState | undefined
 }
 
 const boundsSchema = z.object({
@@ -27,11 +30,16 @@ const boundsSchema = z.object({
   height: z.number().int().min(1).max(100_000),
 })
 
+const sidebarSchema = z.object({
+  open: z.boolean(),
+})
+
 const windowStateSchema = z.object({
   revision: z.literal(1),
   bounds: boundsSchema,
   maximized: z.boolean(),
   fullScreen: z.boolean(),
+  sidebar: sidebarSchema.optional(),
 })
 
 /** Returns validated persisted state or null when the stored document is malformed. */

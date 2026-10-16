@@ -109,6 +109,7 @@ const openApplicationWindow = async (): Promise<void> => {
     tray,
     updater,
     logger,
+    windowService,
   })
   void generation.resumePendingJobs().catch((error: unknown) => {
     logger.warn('Application', 'Pending video jobs could not be resumed.', error)

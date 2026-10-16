@@ -9,6 +9,29 @@ import { DEFAULT_SETTINGS, type BootstrapPayload, type SessionDocument } from '.
 import { toSessionSummary } from '../src/renderer/src/utils/formatters'
 
 describe('appSlice', () => {
+  /** Creates a minimal deterministic bootstrap payload for sidebar hydration tests. */
+  const createPayload = (sidebar: BootstrapPayload['sidebar']): BootstrapPayload => {
+    const now = new Date().toISOString()
+    const session: SessionDocument = {
+      id: randomUUID(),
+      title: 'New Generation',
+      isDefaultTitle: true,
+      createdAt: now,
+      updatedAt: now,
+      item: null,
+    }
+    return {
+      settings: DEFAULT_SETTINGS,
+      sessions: [toSessionSummary(session)],
+      currentSession: session,
+      hasApiKeys: { image: false, video: false, tts: false, stt: false },
+      models: { image: [], video: [], tts: [], stt: [] },
+      sidebar,
+      platform: 'win32',
+      version: '1.0.0',
+    }
+  }
+
   it('hydrates all media catalogs with separate credential flags', () => {
     const session: SessionDocument = {
       id: randomUUID(),
@@ -24,12 +47,25 @@ describe('appSlice', () => {
       currentSession: session,
       hasApiKeys: { image: true, video: false, tts: false, stt: false },
       models: { image: [], video: [], tts: [], stt: [] },
+      sidebar: null,
       platform: 'win32',
       version: '1.0.0',
     }
     const state = reducer(undefined, hydrate(payload))
     expect(state.hasApiKeys).toEqual({ image: true, video: false, tts: false, stt: false })
     expect(state.currentSession?.id).toBe(session.id)
+  })
+
+  it('applies the persisted sessions sidebar state during hydration', () => {
+    const state = reducer(undefined, hydrate(createPayload({ open: false })))
+
+    expect(state.sessionsSidebarOpen).toBe(false)
+  })
+
+  it('keeps the default sessions sidebar state when no sidebar state was persisted', () => {
+    const state = reducer(undefined, hydrate(createPayload(null)))
+
+    expect(state.sessionsSidebarOpen).toBe(true)
   })
 
   it('applies a background update to the selected session', () => {

@@ -11,6 +11,7 @@ describe('IpcChannel', () => {
     expect(Object.values(IpcChannel)).toContain('media:save')
     expect(Object.values(IpcChannel)).toContain('references:select')
     expect(Object.values(IpcChannel)).toContain('audio-input:select')
+    expect(Object.values(IpcChannel)).toContain('window:sidebar-state-set')
   })
 
   it('does not expose recording or translation channels', () => {

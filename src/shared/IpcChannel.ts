@@ -28,6 +28,7 @@ export enum IpcChannel {
   WindowToggleMaximize = 'window:toggle-maximize',
   WindowClose = 'window:close',
   WindowIsMaximized = 'window:is-maximized',
+  WindowSidebarStateSet = 'window:sidebar-state-set',
   ThemeSet = 'theme:set',
   ShellOpenExternal = 'shell:open-external',
   LogsOpenDirectory = 'logs:open-directory',
