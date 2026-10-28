@@ -9,10 +9,13 @@ import {
   IMAGE_BACKGROUNDS,
   IMAGE_OUTPUT_FORMATS,
   IMAGE_QUALITIES,
+  IMAGE_TRANSPARENCY_FORMATS,
+  TTS_OUTPUT_FORMATS,
   type ImageBackground,
   type ImageOutputFormat,
   type ImageQuality,
   type MediaModel,
+  type TtsOutputFormat,
 } from '@shared/openrouter'
 import type {
   AppSettings,
@@ -99,6 +102,10 @@ const allowedImageValues = <Value extends string>(
   allowed: readonly Value[],
 ): Value[] => values.filter((value): value is Value => allowed.includes(value as Value))
 
+/** Returns the model's native TTS formats or the standard OpenRouter pairing. */
+export const getTtsResponseFormats = (model: MediaModel | undefined): TtsOutputFormat[] =>
+  model?.supportedResponseFormats.length ? model.supportedResponseFormats : [...TTS_OUTPUT_FORMATS]
+
 /** Builds a complete nested patch whose values are valid for the selected model. */
 export const createCompatibleModelPatch = (
   kind: MediaKind,
@@ -121,6 +128,17 @@ export const createCompatibleModelPatch = (
       getCapabilityValues(model, 'background', [...IMAGE_BACKGROUNDS]),
       IMAGE_BACKGROUNDS,
     )
+    const requestedBackground = model.capabilities.background
+      ? compatibleValue(current.background, backgrounds)
+      : undefined
+    const transparentFormats = formats.filter((format) =>
+      IMAGE_TRANSPARENCY_FORMATS.some((value) => value === format),
+    )
+    const background =
+      requestedBackground === 'transparent' && !transparentFormats.length
+        ? 'auto'
+        : requestedBackground
+    const outputFormats = background === 'transparent' ? transparentFormats : formats
     return {
       image: {
         providers: {
@@ -136,11 +154,9 @@ export const createCompatibleModelPatch = (
               ? { quality: compatibleValue(current.quality, qualities) }
               : {}),
             ...(model.capabilities.output_format
-              ? { outputFormat: compatibleValue(current.outputFormat, formats) }
+              ? { outputFormat: compatibleValue(current.outputFormat, outputFormats) }
               : {}),
-            ...(model.capabilities.background
-              ? { background: compatibleValue(current.background, backgrounds) }
-              : {}),
+            ...(background ? { background } : {}),
             ...(model.capabilities.n ? { count: compatibleRange(current.count, model, 'n') } : {}),
             ...(model.capabilities.output_compression
               ? {
@@ -184,15 +200,22 @@ export const createCompatibleModelPatch = (
   }
   if (kind === 'tts') {
     const current = settings.tts.providers.openrouter
+    const responseFormats = getTtsResponseFormats(model)
+    const modelChanged = current.modelId !== model.id
     return {
       tts: {
         providers: {
           openrouter: {
             modelId: model.id,
             voice: model.supportsCustomVoice
-              ? current.voice
+              ? modelChanged
+                ? ''
+                : current.voice
               : compatibleValue(current.voice, model.supportedVoices),
-            speed: compatibleDecimalRange(current.speed, model, 'speed'),
+            responseFormat: compatibleValue(current.responseFormat, responseFormats),
+            ...(model.capabilities.speed
+              ? { speed: compatibleDecimalRange(current.speed, model, 'speed') }
+              : {}),
           },
         },
       },
@@ -214,12 +237,14 @@ export const createSupportedGenerationOptions = (
   if (kind === 'image') {
     const image = settings.image.providers.openrouter
     const supported = model.capabilities
+    const countRange = getCapabilityRange(model, 'n', { min: 1, max: 10 })
+    const count = Math.min(Math.min(10, countRange.max), Math.max(1, countRange.min, image.count))
     return {
       ...(supported.resolution ? { resolution: image.resolution } : {}),
       ...(supported.aspect_ratio ? { aspectRatio: image.aspectRatio } : {}),
       ...(supported.quality ? { quality: image.quality } : {}),
       ...(supported.output_format ? { outputFormat: image.outputFormat } : {}),
-      ...(supported.n ? { count: image.count } : {}),
+      ...(supported.n ? { count } : {}),
       ...(supported.background ? { background: image.background } : {}),
       ...(supported.output_compression ? { outputCompression: image.outputCompression } : {}),
       ...(supported.seed && image.seed !== null ? { seed: image.seed } : {}),
@@ -243,7 +268,21 @@ export const createSupportedGenerationOptions = (
   }
   if (kind === 'tts') {
     const tts = settings.tts.providers.openrouter
-    return { voice: tts.voice, responseFormat: tts.responseFormat, speed: tts.speed }
+    const responseFormats = getTtsResponseFormats(model)
+    const voice = model.supportsCustomVoice
+      ? tts.voice.trim()
+      : model.supportedVoices.includes(tts.voice)
+        ? tts.voice
+        : (model.supportedVoices[0] ?? '')
+    return {
+      ...(voice ? { voice } : {}),
+      responseFormat: responseFormats.includes(tts.responseFormat)
+        ? tts.responseFormat
+        : (responseFormats[0] ?? 'mp3'),
+      ...(model.capabilities.speed
+        ? { speed: compatibleDecimalRange(tts.speed, model, 'speed') }
+        : {}),
+    }
   }
   const stt = settings.stt.providers.openrouter
   return {
@@ -290,7 +329,16 @@ export const createSessionSettingsPatch = (item: GenerationItem): AppSettingsPat
     const options = item.options as TtsGenerationOptions
     return {
       generationMode: 'tts',
-      tts: { providers: { openrouter: { modelId: item.modelId, ...options } } },
+      tts: {
+        providers: {
+          openrouter: {
+            modelId: item.modelId,
+            responseFormat: options.responseFormat,
+            voice: options.voice ?? '',
+            speed: options.speed ?? 1,
+          },
+        },
+      },
     }
   }
   const options = item.options as SttGenerationOptions

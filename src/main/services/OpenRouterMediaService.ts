@@ -12,6 +12,7 @@ import {
 } from '@shared/openrouter'
 import type {
   ImageGenerationOptions,
+  PcmAudioFormat,
   SttGenerationOptions,
   TtsGenerationOptions,
   VideoGenerationOptions,
@@ -31,7 +32,7 @@ const imageResponseSchema = z.object({
 
 const videoSubmitSchema = z.object({
   id: z.string().min(1),
-  polling_url: z.url(),
+  polling_url: z.string().min(1),
   status: z.string(),
 })
 
@@ -39,6 +40,7 @@ const videoStatusSchema = z.object({
   id: z.string().min(1),
   status: z.enum(['pending', 'in_progress', 'completed', 'failed', 'cancelled', 'expired']),
   unsigned_urls: z.array(z.url()).nullish(),
+  urls: z.array(z.url()).nullish(),
   error: z.union([z.string(), z.object({ message: z.string() })]).nullish(),
   usage: z.object({ cost: z.number().nonnegative().nullish() }).nullish(),
 })
@@ -85,6 +87,7 @@ export interface VideoJobStatus {
 export interface GeneratedSpeechResult {
   bytes: Uint8Array
   mediaType: string
+  pcm?: PcmAudioFormat
   costUsd?: number
 }
 
@@ -92,6 +95,53 @@ export interface GeneratedSpeechResult {
 export interface TranscriptionResult {
   text: string
   costUsd?: number
+}
+
+const PCM_DEFAULT_FORMAT: PcmAudioFormat = {
+  sampleRate: 24_000,
+  channels: 1,
+  bitsPerSample: 16,
+}
+
+/** Reads PCM sample-rate and channel parameters from an audio/pcm content type. */
+const parsePcmFormat = (contentType: string | null): PcmAudioFormat | undefined => {
+  if (!contentType) return undefined
+  const [rawMediaType, ...parameters] = contentType.split(';')
+  if (rawMediaType?.trim().toLocaleLowerCase('en-US') !== 'audio/pcm') return undefined
+  const values = new Map<string, string>()
+  for (const parameter of parameters) {
+    const separator = parameter.indexOf('=')
+    if (separator < 0) continue
+    values.set(
+      parameter.slice(0, separator).trim().toLocaleLowerCase('en-US'),
+      parameter.slice(separator + 1).trim(),
+    )
+  }
+  const positiveInteger = (keys: string[], fallback: number): number => {
+    for (const key of keys) {
+      const value = Number(values.get(key))
+      if (Number.isInteger(value) && value > 0) return value
+    }
+    return fallback
+  }
+  return {
+    sampleRate: positiveInteger(
+      ['rate', 'sample_rate', 'samplerate'],
+      PCM_DEFAULT_FORMAT.sampleRate,
+    ),
+    channels: positiveInteger(['channels'], PCM_DEFAULT_FORMAT.channels),
+    bitsPerSample: positiveInteger(
+      ['bits', 'bit_depth', 'bitspersample'],
+      PCM_DEFAULT_FORMAT.bitsPerSample,
+    ),
+  }
+}
+
+/** Resolves relative polling URLs while rejecting non-OpenRouter origins. */
+const toOpenRouterUrl = (value: string): string => {
+  const url = new URL(value, 'https://openrouter.ai')
+  if (url.origin !== 'https://openrouter.ai') throw new Error('Untrusted video polling URL.')
+  return url.toString()
 }
 
 /** Narrows an unknown value to a plain JSON-style record. */
@@ -209,22 +259,29 @@ export default class OpenRouterMediaService {
       body: JSON.stringify({
         model: modelId,
         input,
-        voice: options.voice,
+        ...(options.voice?.trim() ? { voice: options.voice.trim() } : {}),
         response_format: options.responseFormat,
-        speed: options.speed,
+        ...(options.speed !== undefined ? { speed: options.speed } : {}),
       }),
       signal: AbortSignal.timeout(10 * 60 * 1_000),
     })
     if (!response.ok) throw await providerError(response)
     const generationId = response.headers.get('x-generation-id')?.trim()
+    const contentType = response.headers.get('content-type')
     const bytes = new Uint8Array(await response.arrayBuffer())
     if (!bytes.byteLength) throw new Error('OpenRouter returned empty speech audio.')
     const costUsd = generationId ? await this.getGenerationCost(apiKey, generationId) : undefined
+    const declaredMediaType = contentType?.split(';')[0]?.trim()
+    const mediaType =
+      declaredMediaType || (options.responseFormat === 'mp3' ? 'audio/mpeg' : 'audio/pcm')
+    const pcm =
+      mediaType.toLocaleLowerCase('en-US') === 'audio/pcm'
+        ? (parsePcmFormat(contentType) ?? { ...PCM_DEFAULT_FORMAT })
+        : undefined
     return {
       bytes,
-      mediaType:
-        response.headers.get('content-type')?.split(';')[0] ??
-        (options.responseFormat === 'mp3' ? 'audio/mpeg' : 'audio/pcm'),
+      mediaType,
+      ...(pcm ? { pcm } : {}),
       ...(costUsd !== undefined ? { costUsd } : {}),
     }
   }
@@ -277,6 +334,9 @@ export default class OpenRouterMediaService {
         image_url: { url: reference.dataUrl },
         frame_type: reference.role,
       }))
+    const inputReferences = references
+      .filter((reference) => reference.role === 'reference')
+      .map((reference) => ({ type: 'image_url', image_url: { url: reference.dataUrl } }))
     const response = await this.fetcher(OPENROUTER_VIDEOS_URL, {
       method: 'POST',
       headers: {
@@ -288,29 +348,34 @@ export default class OpenRouterMediaService {
         prompt,
         ...this.definedOptions(options),
         ...(frameImages.length ? { frame_images: frameImages } : {}),
+        ...(inputReferences.length ? { input_references: inputReferences } : {}),
       }),
       signal: AbortSignal.timeout(60_000),
     })
     if (!response.ok) throw await providerError(response)
     const result = videoSubmitSchema.parse(await response.json())
-    return { id: result.id, pollingUrl: result.polling_url, status: result.status }
+    return {
+      id: result.id,
+      pollingUrl: toOpenRouterUrl(result.polling_url),
+      status: result.status,
+    }
   }
 
   /** Polls one known OpenRouter video job without accepting an arbitrary origin. */
   public async pollVideo(apiKey: string, pollingUrl: string): Promise<VideoJobStatus> {
-    const url = new URL(pollingUrl)
-    if (url.origin !== 'https://openrouter.ai') throw new Error('Untrusted video polling URL.')
-    const response = await this.fetcher(url.toString(), {
+    const url = toOpenRouterUrl(pollingUrl)
+    const response = await this.fetcher(url, {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
     })
     if (!response.ok) throw await providerError(response)
     const result = videoStatusSchema.parse(await response.json())
     const error = typeof result.error === 'string' ? result.error : result.error?.message
+    const urls = result.unsigned_urls?.length ? result.unsigned_urls : (result.urls ?? [])
     return {
       id: result.id,
       status: result.status,
-      urls: result.unsigned_urls ?? [],
+      urls,
       ...(result.usage?.cost != null ? { costUsd: result.usage.cost } : {}),
       ...(error ? { error } : {}),
     }

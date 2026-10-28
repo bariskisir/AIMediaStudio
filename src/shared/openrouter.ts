@@ -17,8 +17,9 @@ export const OPENROUTER_GENERATION_URL = 'https://openrouter.ai/api/v1/generatio
 export const OPENROUTER_KEYS_URL = 'https://openrouter.ai/settings/keys'
 
 export const IMAGE_OUTPUT_FORMATS = ['png', 'jpeg', 'webp', 'svg'] as const
-export const IMAGE_QUALITIES = ['auto', 'low', 'medium', 'high'] as const
+export const IMAGE_QUALITIES = ['auto', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 export const IMAGE_BACKGROUNDS = ['auto', 'transparent', 'opaque'] as const
+export const IMAGE_TRANSPARENCY_FORMATS = ['png', 'webp'] as const
 export const TTS_OUTPUT_FORMATS = ['mp3', 'pcm'] as const
 export const AUDIO_INPUT_FORMATS = ['wav', 'mp3', 'flac', 'm4a', 'ogg', 'webm', 'aac'] as const
 export const MEDIA_KINDS = ['image', 'video', 'tts', 'stt'] as const
@@ -62,6 +63,7 @@ export interface MediaModel {
   supportsAudio: boolean
   supportedVoices: string[]
   supportsCustomVoice: boolean
+  supportedResponseFormats: TtsOutputFormat[]
 }
 
 /** Returns the preferred native output price and then the cheapest price within that unit. */
@@ -98,7 +100,11 @@ export const getModelPriceUnitPriority = (kind: MediaKind, price: ModelPrice): n
   const unit = price.unit.trim().toLocaleLowerCase('en-US')
   if (kind === 'tts') {
     if (price.billable === 'input_character' && isCharacterPrice(price)) return 0
-    if (isTokenPrice(price)) return 1
+    if (price.billable === 'output_audio') {
+      if (unit === 'second' || unit === 'seconds') return 0
+      if (isTokenPrice(price)) return 1
+    }
+    if (isTokenPrice(price)) return 2
     return 3
   }
   if (kind === 'stt') {

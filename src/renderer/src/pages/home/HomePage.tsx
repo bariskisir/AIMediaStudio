@@ -28,7 +28,7 @@ import {
 } from 'antd'
 import { AudioLines, Copy, Download, ExternalLink, Plus, Sparkles, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { estimateTtsCost, getDisplayPrice } from '@shared/openrouter'
+import { estimateTtsCost, getDisplayPrice, IMAGE_QUALITIES } from '@shared/openrouter'
 import { createSpeechLanguageOptions } from '@shared/speech'
 import {
   WORKSPACE_INPUT_PERCENT_LIMITS,
@@ -58,6 +58,7 @@ import {
   createSupportedGenerationOptions,
   getCapabilityRange,
   getCapabilityValues,
+  getTtsResponseFormats,
   sortModelsByOutputPrice,
 } from '@renderer/utils/modelSettings'
 import MediaModeControl from './MediaModeControl'
@@ -225,8 +226,10 @@ const HomePage = (): React.JSX.Element => {
   /** Opens a native image picker and limits video inputs to structured frame roles. */
   const selectReferences = async (): Promise<void> => {
     if (mode !== 'image' && mode !== 'video') return
+    const maximum =
+      mode === 'image' ? imageReferenceRange.max : (selectedModel?.supportedFrameImages.length ?? 0)
+    if (references.length >= maximum) return
     const selected = await window.app.selectReferenceImages(mode)
-    const maximum = mode === 'image' ? 10 : (selectedModel?.supportedFrameImages.length ?? 0)
     const available = Math.max(0, maximum - references.length)
     setReferences((current) => [...current, ...selected.slice(0, available)])
     const discarded = selected.slice(available)
@@ -437,7 +440,12 @@ const HomePage = (): React.JSX.Element => {
   /** Submits current values as a new independent history item. */
   const generate = async (): Promise<void> => {
     const hasAudioInput = Boolean(audioInput || audioSourceSessionId)
-    if (generationLocked || !selectedModel || (mode === 'stt' ? !hasAudioInput : !prompt.trim())) {
+    if (
+      generationLocked ||
+      !selectedModel ||
+      (mode === 'stt' ? !hasAudioInput : !prompt.trim()) ||
+      (mode === 'image' && references.length < imageReferenceRange.min)
+    ) {
       return
     }
     let request: GenerateRequest
@@ -504,6 +512,17 @@ const HomePage = (): React.JSX.Element => {
   const videoSettings = settings.video.providers.openrouter
   const ttsSettings = settings.tts.providers.openrouter
   const sttSettings = settings.stt.providers.openrouter
+  const imageReferenceCapability = selectedModel?.capabilities.input_references
+  const imageReferenceRange =
+    imageReferenceCapability?.type === 'range'
+      ? { min: imageReferenceCapability.min, max: imageReferenceCapability.max }
+      : imageReferenceCapability
+        ? { min: 0, max: 20 }
+        : { min: 0, max: 0 }
+  const minimumReferences = mode === 'image' ? imageReferenceRange.min : 0
+  const imageCountRange = getCapabilityRange(selectedModel, 'n', { min: 1, max: 10 })
+  const ttsResponseFormats = getTtsResponseFormats(selectedModel)
+  const ttsSpeedCapability = selectedModel?.capabilities.speed
   const ttsSpeedRange = getCapabilityRange(selectedModel, 'speed', { min: 0.25, max: 4 })
   const supportsReferences =
     mode === 'image'
@@ -540,10 +559,20 @@ const HomePage = (): React.JSX.Element => {
   const resultCostIsEstimated =
     resultItem?.kind === 'tts' && resultItem.costUsd === undefined && estimatedResultCost !== null
   const generating = isActiveGenerationStatus(activeStatus)
+  const ttsVoiceRequired = Boolean(
+    mode === 'tts' &&
+    selectedModel &&
+    !selectedModel.supportsCustomVoice &&
+    selectedModel.supportedVoices.length,
+  )
   const hasRequiredInput =
     mode === 'stt'
       ? Boolean(audioInput || audioSourceSessionId)
-      : Boolean(prompt.trim() && (mode !== 'tts' || ttsSettings.voice.trim()))
+      : Boolean(
+          prompt.trim() &&
+          references.length >= minimumReferences &&
+          (!ttsVoiceRequired || ttsSettings.voice.trim()),
+        )
 
   /** Copies completed STT text through the trusted main-process clipboard boundary. */
   const copyTranscription = (): void => {
@@ -653,10 +682,7 @@ const HomePage = (): React.JSX.Element => {
                         <Select
                           value={imageSettings.quality}
                           options={getCapabilityValues(selectedModel, 'quality', [
-                            'auto',
-                            'low',
-                            'medium',
-                            'high',
+                            ...IMAGE_QUALITIES,
                           ]).map((value) => ({
                             value,
                             label: t(`home.imageQuality.${value}`, value),
@@ -682,8 +708,8 @@ const HomePage = (): React.JSX.Element => {
                       {selectedModel?.capabilities.n && (
                         <InputNumber
                           className={styles.nextSettingsRow ?? ''}
-                          min={1}
-                          max={10}
+                          min={Math.max(1, imageCountRange.min)}
+                          max={Math.min(10, imageCountRange.max)}
                           value={imageSettings.count}
                           addonBefore={t('home.count')}
                           onChange={(count) => saveModeOption({ count: count ?? 1 })}
@@ -791,7 +817,7 @@ const HomePage = (): React.JSX.Element => {
                           placeholder={t('home.voiceId')}
                           onChange={(event) => saveModeOption({ voice: event.target.value })}
                         />
-                      ) : (
+                      ) : selectedModel?.supportedVoices.length ? (
                         <Select
                           showSearch
                           value={ttsSettings.voice || undefined}
@@ -801,24 +827,30 @@ const HomePage = (): React.JSX.Element => {
                           }))}
                           onChange={(voice) => saveModeOption({ voice })}
                         />
-                      )}
+                      ) : null}
                       <Select
                         className={styles.nextSettingsRow ?? ''}
-                        value={ttsSettings.responseFormat}
-                        options={[
-                          { value: 'mp3', label: t('home.audioFormat.mp3') },
-                          { value: 'pcm', label: t('home.audioFormat.pcm') },
-                        ]}
+                        value={
+                          ttsResponseFormats.includes(ttsSettings.responseFormat)
+                            ? ttsSettings.responseFormat
+                            : (ttsResponseFormats[0] ?? ttsSettings.responseFormat)
+                        }
+                        options={ttsResponseFormats.map((value) => ({
+                          value,
+                          label: t(`home.audioFormat.${value}`, value),
+                        }))}
                         onChange={(responseFormat) => saveModeOption({ responseFormat })}
                       />
-                      <InputNumber
-                        min={ttsSpeedRange.min}
-                        max={ttsSpeedRange.max}
-                        step={0.1}
-                        value={ttsSettings.speed}
-                        addonBefore={t('home.speed')}
-                        onChange={(speed) => saveModeOption({ speed: speed ?? 1 })}
-                      />
+                      {ttsSpeedCapability && (
+                        <InputNumber
+                          min={ttsSpeedRange.min}
+                          max={ttsSpeedRange.max}
+                          step={0.1}
+                          value={ttsSettings.speed}
+                          addonBefore={t('home.speed')}
+                          onChange={(speed) => saveModeOption({ speed: speed ?? 1 })}
+                        />
+                      )}
                       <span className={styles.speechHint}>{t('home.speechHint')}</span>
                     </>
                   ) : (
@@ -863,9 +895,23 @@ const HomePage = (): React.JSX.Element => {
                         />
                       </div>
                     ))}
-                    <Button icon={<Plus size={14} />} onClick={() => void selectReferences()}>
+                    <Button
+                      icon={<Plus size={14} />}
+                      disabled={
+                        references.length >=
+                        (mode === 'image'
+                          ? imageReferenceRange.max
+                          : (selectedModel?.supportedFrameImages.length ?? 0))
+                      }
+                      onClick={() => void selectReferences()}
+                    >
                       {mode === 'image' ? t('home.addReference') : t('home.addFrame')}
                     </Button>
+                    {mode === 'image' && references.length < minimumReferences && (
+                      <span className={styles.referenceHint}>
+                        {t('home.referencesRequired', { min: minimumReferences })}
+                      </span>
+                    )}
                   </div>
                 )}
                 <Button

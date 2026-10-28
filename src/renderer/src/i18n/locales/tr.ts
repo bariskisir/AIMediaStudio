@@ -56,6 +56,7 @@ export default {
     exactSize: 'Tam boyut',
     exactVideoSize: 'Tam video boyutu',
     addReference: 'Referans ekle',
+    referencesRequired: 'Bu model en az {{min}} referans görseli gerektirir.',
     addFrame: 'Kare ekle',
     generate: 'Oluştur',
     regenerate: 'Yeniden oluştur',
@@ -74,7 +75,14 @@ export default {
     imagePreviewAria:
       'Görüntü önizlemesi. Yakınlaştırmak için fare tekerleğini, kaydırmak için sürükleyin.',
     generatedPreview: 'Oluşturulan önizleme',
-    imageQuality: { auto: 'Otomatik', low: 'Düşük', medium: 'Orta', high: 'Yüksek' },
+    imageQuality: {
+      auto: 'Otomatik',
+      low: 'Düşük',
+      medium: 'Orta',
+      high: 'Yüksek',
+      xhigh: 'Çok yüksek',
+      max: 'Maksimum',
+    },
     imageFormat: { png: 'PNG', jpeg: 'JPEG', webp: 'WebP', svg: 'SVG' },
     imageBackground: { auto: 'Otomatik', transparent: 'Saydam', opaque: 'Opak' },
     audioFormat: { mp3: 'MP3', pcm: 'PCM' },

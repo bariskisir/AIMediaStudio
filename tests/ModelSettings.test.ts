@@ -30,6 +30,7 @@ const createModel = (overrides: Partial<MediaModel>): MediaModel => ({
   supportsAudio: false,
   supportedVoices: [],
   supportsCustomVoice: false,
+  supportedResponseFormats: [],
   ...overrides,
 })
 
@@ -178,7 +179,96 @@ describe('modelSettings', () => {
     expect(createCompatibleModelPatch('tts', model, settings).tts?.providers?.openrouter).toEqual({
       modelId: 'vendor/tts',
       voice: 'alloy',
-      speed: 1,
+      responseFormat: 'mp3',
+    })
+  })
+
+  it('clears a provider-specific custom voice when the selected model changes', () => {
+    const settings: AppSettings = structuredClone(DEFAULT_SETTINGS)
+    settings.tts.providers.openrouter.modelId = 'google/gemini-tts'
+    settings.tts.providers.openrouter.voice = 'Kore'
+    const model = createModel({
+      id: 'fish-audio/s2.1-pro',
+      kind: 'tts',
+      supportsCustomVoice: true,
+      supportedVoices: [],
+    })
+
+    expect(
+      createCompatibleModelPatch('tts', model, settings).tts?.providers?.openrouter,
+    ).toMatchObject({
+      modelId: 'fish-audio/s2.1-pro',
+      voice: '',
+    })
+
+    settings.tts.providers.openrouter.modelId = model.id
+    settings.tts.providers.openrouter.voice = ''
+    settings.tts.providers.openrouter.speed = 1.5
+    expect(createSupportedGenerationOptions('tts', model, settings)).toEqual({
+      responseFormat: 'mp3',
+    })
+  })
+
+  it('keeps TTS speed only for models that advertise it', () => {
+    const settings: AppSettings = structuredClone(DEFAULT_SETTINGS)
+    settings.tts.providers.openrouter.responseFormat = 'pcm'
+    settings.tts.providers.openrouter.speed = 3
+    const model = createModel({
+      id: 'vendor/tts',
+      kind: 'tts',
+      supportedVoices: ['alloy'],
+      supportedResponseFormats: ['pcm'],
+      capabilities: { speed: { type: 'range', min: 0.5, max: 2 } },
+    })
+
+    expect(createCompatibleModelPatch('tts', model, settings).tts?.providers?.openrouter).toEqual({
+      modelId: 'vendor/tts',
+      voice: 'alloy',
+      responseFormat: 'pcm',
+      speed: 2,
+    })
+    expect(createSupportedGenerationOptions('tts', model, settings)).toEqual({
+      voice: 'alloy',
+      responseFormat: 'pcm',
+      speed: 2,
+    })
+  })
+
+  it('selects an alpha-capable image format for transparent backgrounds', () => {
+    const settings: AppSettings = structuredClone(DEFAULT_SETTINGS)
+    settings.image.providers.openrouter.background = 'transparent'
+    settings.image.providers.openrouter.outputFormat = 'jpeg'
+    const model = createModel({
+      capabilities: {
+        background: { type: 'enum', values: ['auto', 'transparent', 'opaque'] },
+        output_format: { type: 'enum', values: ['jpeg', 'png', 'webp'] },
+      },
+    })
+
+    expect(
+      createCompatibleModelPatch('image', model, settings).image?.providers?.openrouter,
+    ).toMatchObject({
+      background: 'transparent',
+      outputFormat: 'png',
+    })
+  })
+
+  it('falls back to an opaque background when the model has no alpha-capable format', () => {
+    const settings: AppSettings = structuredClone(DEFAULT_SETTINGS)
+    settings.image.providers.openrouter.background = 'transparent'
+    settings.image.providers.openrouter.outputFormat = 'jpeg'
+    const model = createModel({
+      capabilities: {
+        background: { type: 'enum', values: ['auto', 'transparent', 'opaque'] },
+        output_format: { type: 'enum', values: ['jpeg'] },
+      },
+    })
+
+    expect(
+      createCompatibleModelPatch('image', model, settings).image?.providers?.openrouter,
+    ).toMatchObject({
+      background: 'auto',
+      outputFormat: 'jpeg',
     })
   })
 

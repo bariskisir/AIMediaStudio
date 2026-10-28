@@ -56,6 +56,7 @@ export default {
     exactSize: 'Tamaño exacto',
     exactVideoSize: 'Tamaño exacto de video',
     addReference: 'Añadir referencia',
+    referencesRequired: 'Este modelo requiere al menos {{min}} imágenes de referencia.',
     addFrame: 'Añadir fotograma',
     generate: 'Generar',
     regenerate: 'Regenerar',
@@ -74,7 +75,14 @@ export default {
     imagePreviewAria:
       'Vista previa de imagen. Use la rueda del ratón para zoom y arrastre para mover.',
     generatedPreview: 'Vista previa generada',
-    imageQuality: { auto: 'Auto', low: 'Baja', medium: 'Media', high: 'Alta' },
+    imageQuality: {
+      auto: 'Auto',
+      low: 'Baja',
+      medium: 'Media',
+      high: 'Alta',
+      xhigh: 'Muy alta',
+      max: 'Máxima',
+    },
     imageFormat: { png: 'PNG', jpeg: 'JPEG', webp: 'WebP', svg: 'SVG' },
     imageBackground: { auto: 'Auto', transparent: 'Transparente', opaque: 'Opaco' },
     audioFormat: { mp3: 'MP3', pcm: 'PCM' },

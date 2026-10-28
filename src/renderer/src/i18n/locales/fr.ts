@@ -56,6 +56,7 @@ export default {
     exactSize: 'Taille exacte',
     exactVideoSize: 'Taille exacte de la vidéo',
     addReference: 'Ajouter une référence',
+    referencesRequired: 'Ce modèle nécessite au moins {{min}} images de référence.',
     addFrame: 'Ajouter une image',
     generate: 'Générer',
     regenerate: 'Régénérer',
@@ -74,7 +75,14 @@ export default {
     imagePreviewAria:
       "Aperçu de l'image. Utilisez la molette pour zoomer et faites glisser pour déplacer.",
     generatedPreview: 'Aperçu généré',
-    imageQuality: { auto: 'Auto', low: 'Basse', medium: 'Moyenne', high: 'Haute' },
+    imageQuality: {
+      auto: 'Auto',
+      low: 'Basse',
+      medium: 'Moyenne',
+      high: 'Haute',
+      xhigh: 'Très haute',
+      max: 'Maximale',
+    },
     imageFormat: { png: 'PNG', jpeg: 'JPEG', webp: 'WebP', svg: 'SVG' },
     imageBackground: { auto: 'Auto', transparent: 'Transparent', opaque: 'Opaque' },
     audioFormat: { mp3: 'MP3', pcm: 'PCM' },

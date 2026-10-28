@@ -3,7 +3,11 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import type { MediaModel } from '@shared/openrouter'
+import {
+  IMAGE_TRANSPARENCY_FORMATS,
+  type CapabilityDescriptor,
+  type MediaModel,
+} from '@shared/openrouter'
 import type {
   AppErrorEvent,
   GenerateRequest,
@@ -158,7 +162,12 @@ export default class GenerationService {
           item.prompt,
           item.options as TtsGenerationOptions,
         )
-        const asset = await this.assets.saveAudio(sessionId, result.bytes, result.mediaType)
+        const asset = await this.assets.saveAudio(
+          sessionId,
+          result.bytes,
+          result.mediaType,
+          result.pcm,
+        )
         await this.update(sessionId, item, 'completed', {
           assets: [asset],
           ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {}),
@@ -193,10 +202,11 @@ export default class GenerationService {
       })
       if (submitted.item) await this.pollVideo(sessionId, submitted.item, apiKey)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Generation failed.'
       await this.fail(
         sessionId,
         item,
-        error instanceof Error ? error.message : 'Generation failed.',
+        request.kind === 'video' ? toActionableVideoError(message) : message,
       )
     }
   }
@@ -265,7 +275,7 @@ export default class GenerationService {
         await this.fail(
           sessionId,
           item,
-          error instanceof Error ? error.message : 'Video polling failed.',
+          toActionableVideoError(error instanceof Error ? error.message : 'Video polling failed.'),
         )
         return
       }
@@ -278,38 +288,96 @@ export default class GenerationService {
     const supported = model.capabilities
     if (request.kind === 'image') {
       const options = request.options
+      const referenceCapability = supported.input_references
+      if (request.references.length) {
+        if (!referenceCapability) {
+          throw new Error('The selected image model does not accept reference images.')
+        }
+        if (request.references.some((reference) => reference.role !== 'reference')) {
+          throw new Error('Image generation only accepts reference images.')
+        }
+        const maximumReferences =
+          referenceCapability.type === 'range' ? referenceCapability.max : 20
+        if (request.references.length > maximumReferences) {
+          throw new Error(`This model accepts at most ${maximumReferences} reference images.`)
+        }
+      }
+      if (
+        referenceCapability?.type === 'range' &&
+        referenceCapability.min > request.references.length
+      ) {
+        throw new Error(`This model requires at least ${referenceCapability.min} reference images.`)
+      }
+      const outputFormat = this.enumOption(
+        supported.output_format,
+        options.outputFormat,
+        'output format',
+      )
+      const background = this.enumOption(supported.background, options.background, 'background')
+      if (
+        background === 'transparent' &&
+        outputFormat &&
+        !IMAGE_TRANSPARENCY_FORMATS.some((format) => format === outputFormat)
+      ) {
+        throw new Error('Transparent backgrounds require PNG or WebP output.')
+      }
+      let count: number | undefined
+      if (supported.n && options.count) {
+        const minimum = supported.n.type === 'range' ? Math.max(1, supported.n.min) : 1
+        const maximum = supported.n.type === 'range' ? Math.min(10, supported.n.max) : 10
+        count = Math.min(maximum, Math.max(minimum, Math.round(options.count)))
+      }
+      let outputCompression: number | undefined
+      if (supported.output_compression && options.outputCompression !== undefined) {
+        const minimum =
+          supported.output_compression.type === 'range'
+            ? Math.max(0, supported.output_compression.min)
+            : 0
+        const maximum =
+          supported.output_compression.type === 'range'
+            ? Math.min(100, supported.output_compression.max)
+            : 100
+        outputCompression = Math.min(
+          maximum,
+          Math.max(minimum, Math.round(options.outputCompression)),
+        )
+      }
       return {
-        ...(supported.resolution && options.resolution ? { resolution: options.resolution } : {}),
-        ...(supported.aspect_ratio && options.aspectRatio
+        ...(this.enumOption(supported.resolution, options.resolution, 'resolution')
+          ? { resolution: options.resolution }
+          : {}),
+        ...(this.enumOption(supported.aspect_ratio, options.aspectRatio, 'aspect ratio')
           ? { aspectRatio: options.aspectRatio }
           : {}),
-        ...(supported.quality && options.quality ? { quality: options.quality } : {}),
-        ...(supported.output_format && options.outputFormat
-          ? { outputFormat: options.outputFormat }
+        ...(this.enumOption(supported.quality, options.quality, 'quality')
+          ? { quality: options.quality }
           : {}),
-        ...(supported.n && options.count ? { count: options.count } : {}),
-        ...(supported.background && options.background ? { background: options.background } : {}),
-        ...(supported.output_compression && options.outputCompression !== undefined
-          ? { outputCompression: options.outputCompression }
-          : {}),
+        ...(outputFormat ? { outputFormat } : {}),
+        ...(count !== undefined ? { count } : {}),
+        ...(background ? { background } : {}),
+        ...(outputCompression !== undefined ? { outputCompression } : {}),
         ...(supported.seed && options.seed !== undefined ? { seed: options.seed } : {}),
       }
     }
     if (request.kind === 'tts') {
       const options = request.options
+      const responseFormat = model.supportedResponseFormats.includes(options.responseFormat)
+        ? options.responseFormat
+        : (model.supportedResponseFormats[0] ?? options.responseFormat)
       const voice = model.supportsCustomVoice
-        ? options.voice.trim()
-        : model.supportedVoices.includes(options.voice)
+        ? (options.voice?.trim() ?? '')
+        : options.voice && model.supportedVoices.includes(options.voice)
           ? options.voice
           : (model.supportedVoices[0] ?? '')
-      if (!voice) throw new Error('Select or enter a voice supported by this TTS model.')
       const speedCapability = model.capabilities.speed
-      const minimumSpeed = speedCapability?.type === 'range' ? speedCapability.min : 0.25
-      const maximumSpeed = speedCapability?.type === 'range' ? speedCapability.max : 4
+      const speed =
+        speedCapability?.type === 'range' && options.speed !== undefined
+          ? Math.min(speedCapability.max, Math.max(speedCapability.min, options.speed))
+          : undefined
       return {
-        voice,
-        responseFormat: options.responseFormat,
-        speed: Math.min(maximumSpeed, Math.max(minimumSpeed, options.speed)),
+        ...(voice ? { voice } : {}),
+        responseFormat,
+        ...(speed !== undefined ? { speed } : {}),
       }
     }
     if (request.kind === 'stt') {
@@ -321,28 +389,68 @@ export default class GenerationService {
           : {}),
       }
     }
+    const frameRoles = request.references
+      .map((reference) => reference.role)
+      .filter(
+        (role): role is 'first_frame' | 'last_frame' =>
+          role === 'first_frame' || role === 'last_frame',
+      )
+    for (const role of frameRoles) {
+      if (!model.supportedFrameImages.includes(role)) {
+        throw new Error('This model does not support the selected frame image role.')
+      }
+    }
+    if (new Set(frameRoles).size !== frameRoles.length) {
+      throw new Error('Only one first-frame and one last-frame image can be attached.')
+    }
     const options = request.options
-    const exactSize =
-      options.size && model.supportedSizes.includes(options.size) ? options.size : ''
+    if (options.duration !== undefined && !model.supportedDurations.includes(options.duration)) {
+      throw new Error(`This model does not support a ${options.duration}-second duration.`)
+    }
+    const exactSize = options.size ?? ''
+    if (exactSize && !model.supportedSizes.includes(exactSize)) {
+      throw new Error(`This model does not support the ${exactSize} size.`)
+    }
+    if (
+      !exactSize &&
+      options.resolution &&
+      !model.supportedResolutions.includes(options.resolution)
+    ) {
+      throw new Error(`This model does not support the ${options.resolution} resolution.`)
+    }
+    if (
+      !exactSize &&
+      options.aspectRatio &&
+      !model.supportedAspectRatios.includes(options.aspectRatio)
+    ) {
+      throw new Error(`This model does not support the ${options.aspectRatio} aspect ratio.`)
+    }
     return {
-      ...(model.supportedDurations.length && options.duration
-        ? { duration: options.duration }
-        : {}),
+      ...(options.duration !== undefined ? { duration: options.duration } : {}),
       ...(exactSize
         ? { size: exactSize }
         : {
-            ...(model.supportedResolutions.length && options.resolution
-              ? { resolution: options.resolution }
-              : {}),
-            ...(model.supportedAspectRatios.length && options.aspectRatio
-              ? { aspectRatio: options.aspectRatio }
-              : {}),
+            ...(options.resolution ? { resolution: options.resolution } : {}),
+            ...(options.aspectRatio ? { aspectRatio: options.aspectRatio } : {}),
           }),
       ...(model.supportsAudio && options.generateAudio !== undefined
         ? { generateAudio: options.generateAudio }
         : {}),
       ...(supported.seed && options.seed !== undefined ? { seed: options.seed } : {}),
     }
+  }
+
+  /** Validates enum options against the model union before they reach the provider. */
+  private enumOption(
+    descriptor: CapabilityDescriptor | undefined,
+    value: string | undefined,
+    label: string,
+  ): string | undefined {
+    if (!descriptor || value === undefined || value === '') return undefined
+    if (descriptor.type === 'enum' && !descriptor.values.includes(value)) {
+      throw new Error(`The selected model does not support the ${label} "${value}".`)
+    }
+    return value
   }
 
   /** Persists one lifecycle transition and broadcasts the complete session. */

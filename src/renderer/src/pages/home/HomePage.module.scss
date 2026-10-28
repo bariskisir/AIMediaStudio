@@ -332,6 +332,13 @@
   max-width: 100%;
 }
 
+.referenceHint {
+  width: 100%;
+  color: var(--color-text-3);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .reference {
   width: min(215px, 100%);
   min-width: 0;

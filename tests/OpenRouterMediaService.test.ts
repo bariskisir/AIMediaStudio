@@ -31,14 +31,14 @@ describe('OpenRouterMediaService', () => {
     expect(JSON.parse(String(capturedInit?.body)).stream).toBe(false)
   })
 
-  it('submits a video and preserves its polling URL', async () => {
+  it('submits a video and resolves its relative polling URL', async () => {
     let capturedInit: RequestInit | undefined
     const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
       capturedInit = init
       return new Response(
         JSON.stringify({
           id: 'job-1',
-          polling_url: 'https://openrouter.ai/api/v1/videos/job-1',
+          polling_url: '/api/v1/videos/job-1',
           status: 'pending',
         }),
         { status: 202, headers: { 'content-type': 'application/json' } },
@@ -53,13 +53,67 @@ describe('OpenRouterMediaService', () => {
         { duration: 5, resolution: '720p', aspectRatio: '16:9', size: '1280x720' },
         [],
       ),
-    ).resolves.toMatchObject({ id: 'job-1' })
+    ).resolves.toMatchObject({
+      id: 'job-1',
+      pollingUrl: 'https://openrouter.ai/api/v1/videos/job-1',
+    })
     expect(JSON.parse(String(capturedInit?.body))).toMatchObject({
       duration: 5,
       size: '1280x720',
     })
     expect(JSON.parse(String(capturedInit?.body))).not.toHaveProperty('resolution')
     expect(JSON.parse(String(capturedInit?.body))).not.toHaveProperty('aspect_ratio')
+  })
+
+  it('sends frame images and reference images through their dedicated video fields', async () => {
+    let capturedInit: RequestInit | undefined
+    const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      capturedInit = init
+      return new Response(
+        JSON.stringify({
+          id: 'job-1',
+          polling_url: 'https://openrouter.ai/api/v1/videos/job-1',
+          status: 'pending',
+        }),
+        { status: 202, headers: { 'content-type': 'application/json' } },
+      )
+    })
+    const service = new OpenRouterMediaService(fetcher as typeof fetch)
+    await service.submitVideo('secret-key', 'vendor/video', 'A lake', {}, [
+      { role: 'first_frame', dataUrl: 'data:image/png;base64,Zmlyc3Q=' },
+      { role: 'reference', dataUrl: 'data:image/png;base64,cmVm' },
+    ])
+    expect(JSON.parse(String(capturedInit?.body))).toMatchObject({
+      frame_images: [
+        expect.objectContaining({
+          frame_type: 'first_frame',
+          image_url: { url: 'data:image/png;base64,Zmlyc3Q=' },
+        }),
+      ],
+      input_references: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,cmVm' } }],
+    })
+  })
+
+  it('falls back to signed video download URLs when unsigned URLs are absent', async () => {
+    const service = new OpenRouterMediaService(
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              id: 'job-1',
+              status: 'completed',
+              unsigned_urls: null,
+              urls: ['https://cdn.example.com/output.mp4?signature=abc'],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      ) as typeof fetch,
+    )
+    await expect(
+      service.pollVideo('secret-key', 'https://openrouter.ai/api/v1/videos/job-1'),
+    ).resolves.toMatchObject({
+      urls: ['https://cdn.example.com/output.mp4?signature=abc'],
+    })
   })
 
   it('surfaces the provider error message', async () => {
@@ -97,6 +151,7 @@ describe('OpenRouterMediaService', () => {
     })
     expect(result.mediaType).toBe('audio/mpeg')
     expect(result.bytes).toEqual(new Uint8Array([1, 2, 3]))
+    expect(result.pcm).toBeUndefined()
     expect(result.costUsd).toBe(0.0042)
     expect(JSON.parse(String(capturedInit?.body))).toMatchObject({
       input: 'Hello',
@@ -104,6 +159,27 @@ describe('OpenRouterMediaService', () => {
       response_format: 'mp3',
       speed: 1.2,
     })
+  })
+
+  it('omits optional TTS voice and speed when they are not supplied', async () => {
+    let capturedInit: RequestInit | undefined
+    const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      capturedInit = init
+      return new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { 'content-type': 'audio/pcm;rate=44100;channels=1' },
+      })
+    })
+    const service = new OpenRouterMediaService(fetcher as typeof fetch)
+    const result = await service.generateSpeech('secret-key', 'vendor/tts', 'Hello', {
+      responseFormat: 'pcm',
+    })
+    const body = JSON.parse(String(capturedInit?.body))
+    expect(body).toMatchObject({ input: 'Hello', response_format: 'pcm' })
+    expect(body).not.toHaveProperty('voice')
+    expect(body).not.toHaveProperty('speed')
+    expect(result.mediaType).toBe('audio/pcm')
+    expect(result.pcm).toEqual({ sampleRate: 44_100, channels: 1, bitsPerSample: 16 })
   })
 
   it('retries TTS accounting while generation cost is not materialized yet', async () => {

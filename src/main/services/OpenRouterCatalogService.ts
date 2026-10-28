@@ -13,6 +13,7 @@ import {
   type MediaKind,
   type MediaModel,
   type ModelPrice,
+  type TtsOutputFormat,
 } from '@shared/openrouter'
 import { z } from 'zod'
 import { httpFetch } from '../http/http.fetch'
@@ -143,6 +144,20 @@ const normalizeVideoPrice = (sku: string, raw: string | number): ModelPrice | nu
   return { amountUsd: numeric, unit: sku, billable: 'output_video' }
 }
 
+/** Returns the response formats enforced by known TTS provider adapters. */
+const getTtsResponseFormats = (modelId: string): TtsOutputFormat[] => {
+  if (modelId.startsWith('heygen/') || modelId.startsWith('google/')) return ['pcm']
+  if (modelId.startsWith('minimax/')) return ['mp3']
+  return ['mp3', 'pcm']
+}
+
+/** Returns the playback-speed range only for providers that document speed control. */
+const getTtsSpeedRange = (modelId: string): { min: number; max: number } | null => {
+  if (modelId.startsWith('openai/')) return { min: 0.25, max: 4 }
+  if (modelId === 'bytedance-seed/seed-audio-1-0') return { min: 0.5, max: 2 }
+  return null
+}
+
 export default class OpenRouterCatalogService {
   private readonly cachePath: string
   private readonly memoryCache = new Map<MediaKind, MediaModel[]>()
@@ -153,7 +168,7 @@ export default class OpenRouterCatalogService {
     private readonly logger: LoggerService,
     private readonly fetcher: Fetcher = httpFetch,
   ) {
-    this.cachePath = join(dataRoot, 'openrouter-models.json')
+    this.cachePath = join(dataRoot, 'openrouter-models-v2.json')
   }
 
   /** Retrieves one media catalog and falls back only to the last successful response. */
@@ -194,15 +209,16 @@ export default class OpenRouterCatalogService {
     for (let offset = 0; offset < catalog.data.length; offset += 6) {
       const batch = catalog.data.slice(offset, offset + 6)
       const normalized = await Promise.all(
-        batch.map(async (model): Promise<MediaModel> => {
-          const prices = model.endpoints ? await this.fetchImagePrices(model.endpoints) : []
+        batch.map(async (model): Promise<MediaModel | null> => {
+          const endpoint = model.endpoints ? await this.fetchImageEndpoint(model.endpoints) : null
+          if (endpoint && !endpoint.available) return null
           return {
             id: model.id,
             name: model.name,
             description: model.description ?? '',
             kind: 'image',
             capabilities: normalizeCapabilities(model.supported_parameters),
-            prices,
+            prices: endpoint?.prices ?? [],
             supportsStreaming: model.supports_streaming ?? false,
             supportedResolutions: this.enumValues(model.supported_parameters, 'resolution'),
             supportedAspectRatios: this.enumValues(model.supported_parameters, 'aspect_ratio'),
@@ -212,39 +228,45 @@ export default class OpenRouterCatalogService {
             supportsAudio: false,
             supportedVoices: [],
             supportsCustomVoice: false,
+            supportedResponseFormats: [],
           }
         }),
       )
-      models.push(...normalized)
+      models.push(...normalized.filter((model): model is MediaModel => model !== null))
     }
     return models.sort((left, right) => left.name.localeCompare(right.name))
   }
 
-  /** Retrieves directly reported image billing lines for one model. */
-  private async fetchImagePrices(endpointPath: string): Promise<ModelPrice[]> {
+  /** Retrieves reported image billing lines and whether any endpoint can serve the model. */
+  private async fetchImageEndpoint(
+    endpointPath: string,
+  ): Promise<{ prices: ModelPrice[]; available: boolean } | null> {
     try {
       const url = new URL(endpointPath, 'https://openrouter.ai').toString()
       const response = await this.fetcher(url, { signal: AbortSignal.timeout(20_000) })
-      if (!response.ok) return []
+      if (!response.ok) return null
       const payload = endpointCatalogSchema.parse(await response.json())
-      return normalizePrices(
-        payload.endpoints.flatMap((endpoint) =>
-          (endpoint.pricing ?? []).flatMap((price): ModelPrice[] => {
-            const amountUsd = Number(price.cost_usd)
-            if (!Number.isFinite(amountUsd)) return []
-            return [
-              {
-                amountUsd,
-                unit: price.unit,
-                billable: price.billable,
-                ...(price.variant ? { variant: price.variant } : {}),
-              },
-            ]
-          }),
+      return {
+        available: payload.endpoints.length > 0,
+        prices: normalizePrices(
+          payload.endpoints.flatMap((endpoint) =>
+            (endpoint.pricing ?? []).flatMap((price): ModelPrice[] => {
+              const amountUsd = Number(price.cost_usd)
+              if (!Number.isFinite(amountUsd)) return []
+              return [
+                {
+                  amountUsd,
+                  unit: price.unit,
+                  billable: price.billable,
+                  ...(price.variant ? { variant: price.variant } : {}),
+                },
+              ]
+            }),
+          ),
         ),
-      )
+      }
     } catch {
-      return []
+      return null
     }
   }
 
@@ -288,6 +310,7 @@ export default class OpenRouterCatalogService {
           supportsAudio: model.generate_audio ?? false,
           supportedVoices: [],
           supportsCustomVoice: false,
+          supportedResponseFormats: [],
         }
       })
       .sort((left, right) => left.name.localeCompare(right.name))
@@ -307,18 +330,27 @@ export default class OpenRouterCatalogService {
         const promptPrice = Number(model.pricing?.prompt)
         const completionPrice = Number(model.pricing?.completion)
         const prices: ModelPrice[] = []
-        if (kind === 'tts' && Number.isFinite(promptPrice) && promptPrice > 0) {
-          prices.push({
-            amountUsd: promptPrice,
-            unit: 'character',
-            billable: 'input_character',
-          })
+        if (kind === 'tts') {
+          if (promptPrice > 0 && completionPrice > 0) {
+            prices.push(
+              { amountUsd: promptPrice, unit: 'input token', billable: 'input_token' },
+              { amountUsd: completionPrice, unit: 'output token', billable: 'output_audio' },
+            )
+          } else if (promptPrice > 0) {
+            prices.push({
+              amountUsd: promptPrice,
+              unit: 'character',
+              billable: 'input_character',
+            })
+          } else if (completionPrice > 0) {
+            prices.push({ amountUsd: completionPrice, unit: 'second', billable: 'output_audio' })
+          }
         }
         if (kind === 'stt' && Number.isFinite(promptPrice) && promptPrice > 0) {
           if (Number.isFinite(completionPrice) && completionPrice > 0) {
             prices.push({ amountUsd: promptPrice, unit: 'input token', billable: 'input_audio' })
           } else {
-            prices.push({ amountUsd: promptPrice * 60, unit: 'hour', billable: 'input_audio' })
+            prices.push({ amountUsd: promptPrice * 3600, unit: 'hour', billable: 'input_audio' })
           }
         }
         if (kind === 'stt' && Number.isFinite(completionPrice) && completionPrice > 0) {
@@ -334,11 +366,8 @@ export default class OpenRouterCatalogService {
             { type: 'boolean' as const },
           ]),
         )
-        if (kind === 'tts') {
-          capabilities.speed = model.id.startsWith('microsoft/')
-            ? { type: 'range', min: 0.5, max: 2 }
-            : { type: 'range', min: 0.25, max: 4 }
-        }
+        const speedRange = kind === 'tts' ? getTtsSpeedRange(model.id) : null
+        if (speedRange) capabilities.speed = { type: 'range', ...speedRange }
         return {
           id: model.id,
           name: model.name,
@@ -355,6 +384,7 @@ export default class OpenRouterCatalogService {
           supportsAudio: false,
           supportedVoices: model.supported_voices ?? [],
           supportsCustomVoice: kind === 'tts' && model.supported_voices == null,
+          supportedResponseFormats: kind === 'tts' ? getTtsResponseFormats(model.id) : [],
         }
       })
       .sort((left, right) => left.name.localeCompare(right.name))

@@ -116,11 +116,101 @@ describe('OpenRouterCatalogService', () => {
       fetcher as typeof fetch,
     ).getModels('tts')
     expect(models[0]?.supportedVoices).toEqual(['alloy', 'nova'])
+    expect(models[0]?.supportedResponseFormats).toEqual(['mp3', 'pcm'])
+    expect(models[0]?.capabilities.speed).toBeUndefined()
     expect(models[0]?.prices[0]).toEqual({
       amountUsd: 0.000015,
       unit: 'character',
       billable: 'input_character',
     })
+  })
+
+  it('normalizes per-second TTS pricing and provider-specific formats', async () => {
+    root = await mkdtemp(join(tmpdir(), 'aimedia-tts-per-second-'))
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: 'bytedance-seed/seed-audio-1-0',
+                name: 'Seed Audio',
+                pricing: { prompt: '0', completion: '0.0025' },
+                supported_voices: null,
+              },
+              {
+                id: 'google/gemini-tts',
+                name: 'Gemini TTS',
+                pricing: { prompt: '0.0000005', completion: '0.000009' },
+                supported_voices: ['Kore'],
+              },
+              {
+                id: 'heygen/heygen-voice-1',
+                name: 'HeyGen Voice',
+                pricing: { prompt: '0.000015', completion: '0' },
+                supported_voices: ['nadine'],
+              },
+              {
+                id: 'openai/gpt-4o-mini-tts',
+                name: 'OpenAI TTS',
+                pricing: { prompt: '0.000015', completion: '0' },
+                supported_voices: ['alloy'],
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+    )
+    const logger = { warn: vi.fn() } as unknown as LoggerService
+    const models = await new OpenRouterCatalogService(
+      root,
+      logger,
+      fetcher as typeof fetch,
+    ).getModels('tts')
+    const seed = models.find((model) => model.id === 'bytedance-seed/seed-audio-1-0')
+    const google = models.find((model) => model.id === 'google/gemini-tts')
+    const heygen = models.find((model) => model.id === 'heygen/heygen-voice-1')
+    const openai = models.find((model) => model.id === 'openai/gpt-4o-mini-tts')
+    expect(seed?.prices).toEqual([{ amountUsd: 0.0025, unit: 'second', billable: 'output_audio' }])
+    expect(seed?.supportsCustomVoice).toBe(true)
+    expect(seed?.capabilities.speed).toEqual({ type: 'range', min: 0.5, max: 2 })
+    expect(google?.prices).toEqual([
+      { amountUsd: 0.0000005, unit: 'input token', billable: 'input_token' },
+      { amountUsd: 0.000009, unit: 'output token', billable: 'output_audio' },
+    ])
+    expect(google?.supportedResponseFormats).toEqual(['pcm'])
+    expect(heygen?.supportedResponseFormats).toEqual(['pcm'])
+    expect(openai?.supportedResponseFormats).toEqual(['mp3', 'pcm'])
+    expect(openai?.capabilities.speed).toEqual({ type: 'range', min: 0.25, max: 4 })
+  })
+
+  it('hides image models that explicitly expose no serving endpoints', async () => {
+    root = await mkdtemp(join(tmpdir(), 'aimedia-image-empty-'))
+    const fetcher = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith('/endpoints')) {
+        return new Response(JSON.stringify({ endpoints: [] }), { status: 200 })
+      }
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'vendor/unavailable',
+              name: 'Unavailable Image',
+              supported_parameters: {},
+              endpoints: '/api/v1/images/models/vendor/unavailable/endpoints',
+            },
+          ],
+        }),
+        { status: 200 },
+      )
+    })
+    const logger = { warn: vi.fn() } as unknown as LoggerService
+    const models = await new OpenRouterCatalogService(
+      root,
+      logger,
+      fetcher as typeof fetch,
+    ).getModels('image')
+    expect(models).toEqual([])
   })
 
   it('distinguishes duration and token based STT pricing', async () => {
@@ -152,7 +242,7 @@ describe('OpenRouterCatalogService', () => {
       fetcher as typeof fetch,
     ).getModels('stt')
     expect(models.find((model) => model.id.includes('duration'))?.prices[0]).toMatchObject({
-      amountUsd: 0.36,
+      amountUsd: 21.6,
       unit: 'hour',
     })
     expect(models.find((model) => model.id.includes('token'))?.prices).toEqual([

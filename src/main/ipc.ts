@@ -15,7 +15,13 @@ import {
 } from 'electron'
 import { IpcChannel } from '@shared/IpcChannel'
 import { APP_AUTHOR_URL } from '@shared/appInfo'
-import { MEDIA_KINDS } from '@shared/openrouter'
+import {
+  IMAGE_BACKGROUNDS,
+  IMAGE_OUTPUT_FORMATS,
+  IMAGE_QUALITIES,
+  MEDIA_KINDS,
+  TTS_OUTPUT_FORMATS,
+} from '@shared/openrouter'
 import {
   LOG_LEVELS,
   type GenerateRequest,
@@ -55,14 +61,14 @@ const generationSchema = z.discriminatedUnion('kind', [
     options: z.object({
       resolution: z.string().max(32).optional(),
       aspectRatio: z.string().max(32).optional(),
-      quality: z.enum(['auto', 'low', 'medium', 'high']).optional(),
-      outputFormat: z.enum(['png', 'jpeg', 'webp', 'svg']).optional(),
+      quality: z.enum(IMAGE_QUALITIES).optional(),
+      outputFormat: z.enum(IMAGE_OUTPUT_FORMATS).optional(),
       count: z.number().int().min(1).max(10).optional(),
-      background: z.enum(['auto', 'transparent', 'opaque']).optional(),
+      background: z.enum(IMAGE_BACKGROUNDS).optional(),
       outputCompression: z.number().int().min(0).max(100).optional(),
       seed: z.number().int().min(0).max(2_147_483_647).optional(),
     }),
-    references: z.array(z.object({ token: idSchema, role: referenceRoleSchema })).max(10),
+    references: z.array(z.object({ token: idSchema, role: referenceRoleSchema })).max(20),
     sessionId: idSchema.optional(),
   }),
   z.object({
@@ -89,9 +95,9 @@ const generationSchema = z.discriminatedUnion('kind', [
     prompt: z.string().trim().min(1).max(20_000),
     modelId: z.string().trim().min(1).max(200),
     options: z.object({
-      voice: z.string().trim().min(1).max(200),
-      responseFormat: z.enum(['mp3', 'pcm']),
-      speed: z.number().min(0.25).max(4),
+      voice: z.string().trim().max(200).optional(),
+      responseFormat: z.enum(TTS_OUTPUT_FORMATS),
+      speed: z.number().min(0.25).max(4).optional(),
     }),
     sessionId: idSchema.optional(),
   }),
@@ -277,7 +283,7 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
   })
   ipcMain.handle(IpcChannel.ReferencesRelease, (event, tokensInput: unknown) => {
     assertSender(event.sender)
-    services.references.release(z.array(idSchema).max(10).parse(tokensInput))
+    services.references.release(z.array(idSchema).max(100).parse(tokensInput))
   })
   ipcMain.handle(IpcChannel.AudioInputSelect, async (event) => {
     assertSender(event.sender)

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Input, InputNumber, Select, Switch, Tag } from 'antd'
 import { CircleCheck, ExternalLink, KeyRound, RefreshCw, Save, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { getDisplayPrice, OPENROUTER_KEYS_URL } from '@shared/openrouter'
+import { getDisplayPrice, IMAGE_QUALITIES, OPENROUTER_KEYS_URL } from '@shared/openrouter'
 import { createSpeechLanguageOptions } from '@shared/speech'
 import type { MediaKind } from '@shared/types'
 import { useTheme } from '@renderer/context/ThemeProvider'
@@ -18,6 +18,7 @@ import {
   createCompatibleModelPatch,
   getCapabilityRange,
   getCapabilityValues,
+  getTtsResponseFormats,
   sortModelsByOutputPrice,
 } from '@renderer/utils/modelSettings'
 import SettingLabel from './SettingLabel'
@@ -146,6 +147,8 @@ const MediaSettingsSection = ({ kind }: MediaSettingsSectionProps): React.JSX.El
   const video = settings.video.providers.openrouter
   const tts = settings.tts.providers.openrouter
   const stt = settings.stt.providers.openrouter
+  const imageCountRange = getCapabilityRange(model, 'n', { min: 1, max: 10 })
+  const ttsResponseFormats = getTtsResponseFormats(model)
   const ttsSpeedRange = getCapabilityRange(model, 'speed', { min: 0.25, max: 4 })
 
   return (
@@ -314,12 +317,9 @@ const MediaSettingsSection = ({ kind }: MediaSettingsSectionProps): React.JSX.El
                 <Select
                   className={styles.compactControl ?? ''}
                   value={image.quality}
-                  options={getCapabilityValues(model, 'quality', [
-                    'auto',
-                    'low',
-                    'medium',
-                    'high',
-                  ]).map((value) => ({ value }))}
+                  options={getCapabilityValues(model, 'quality', [...IMAGE_QUALITIES]).map(
+                    (value) => ({ value }),
+                  )}
                   onChange={(quality) => saveOption({ quality })}
                 />
               </div>
@@ -350,8 +350,8 @@ const MediaSettingsSection = ({ kind }: MediaSettingsSectionProps): React.JSX.El
                   description={t('settings.media.countDesc')}
                 />
                 <InputNumber
-                  min={1}
-                  max={10}
+                  min={Math.max(1, imageCountRange.min)}
+                  max={Math.min(10, imageCountRange.max)}
                   value={image.count}
                   onChange={(count) => saveOption({ count: count ?? 1 })}
                 />
@@ -530,27 +530,33 @@ const MediaSettingsSection = ({ kind }: MediaSettingsSectionProps): React.JSX.El
               />
               <Select
                 className={styles.compactControl ?? ''}
-                value={tts.responseFormat}
-                options={[
-                  { value: 'mp3', label: 'MP3' },
-                  { value: 'pcm', label: 'PCM' },
-                ]}
+                value={
+                  ttsResponseFormats.includes(tts.responseFormat)
+                    ? tts.responseFormat
+                    : (ttsResponseFormats[0] ?? tts.responseFormat)
+                }
+                options={ttsResponseFormats.map((value) => ({
+                  value,
+                  label: value.toLocaleUpperCase('en-US'),
+                }))}
                 onChange={(responseFormat) => saveOption({ responseFormat })}
               />
             </div>
-            <div className={styles.settingRow}>
-              <SettingLabel
-                title={t('settings.media.speed')}
-                description={t('settings.media.speedDesc')}
-              />
-              <InputNumber
-                min={ttsSpeedRange.min}
-                max={ttsSpeedRange.max}
-                step={0.1}
-                value={tts.speed}
-                onChange={(speed) => saveOption({ speed: speed ?? 1 })}
-              />
-            </div>
+            {model?.capabilities.speed && (
+              <div className={styles.settingRow}>
+                <SettingLabel
+                  title={t('settings.media.speed')}
+                  description={t('settings.media.speedDesc')}
+                />
+                <InputNumber
+                  min={ttsSpeedRange.min}
+                  max={ttsSpeedRange.max}
+                  step={0.1}
+                  value={tts.speed}
+                  onChange={(speed) => saveOption({ speed: speed ?? 1 })}
+                />
+              </div>
+            )}
           </>
         ) : (
           <>

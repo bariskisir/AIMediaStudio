@@ -46,6 +46,7 @@ describe('GenerationService', () => {
       supportsAudio: false,
       supportedVoices: [],
       supportsCustomVoice: false,
+      supportedResponseFormats: [],
     }
     const credential = {
       getApiKey: vi.fn(async () => 'secret-key'),
@@ -123,6 +124,7 @@ describe('GenerationService', () => {
       supportsAudio: false,
       supportedVoices: [],
       supportsCustomVoice: false,
+      supportedResponseFormats: [],
     }
     const credential = {
       getApiKey: vi.fn(async () => 'secret-key'),
@@ -193,6 +195,65 @@ describe('GenerationService', () => {
     )
   })
 
+  it('explains transient video provider failures during submission', async () => {
+    root = await mkdtemp(join(tmpdir(), 'aimedia-video-transient-'))
+    const storage = new StorageService(root)
+    await storage.initialize()
+    const initial = await storage.createSession()
+    const model: MediaModel = {
+      id: 'vendor/video',
+      name: 'Video',
+      description: '',
+      kind: 'video',
+      capabilities: {},
+      prices: [],
+      supportsStreaming: false,
+      supportedResolutions: ['720p'],
+      supportedAspectRatios: ['16:9'],
+      supportedSizes: ['1280x720'],
+      supportedDurations: [4],
+      supportedFrameImages: [],
+      supportsAudio: false,
+      supportedVoices: [],
+      supportsCustomVoice: false,
+      supportedResponseFormats: [],
+    }
+    const credential = {
+      getApiKey: vi.fn(async () => 'secret-key'),
+    } as unknown as CredentialService
+    const service = new GenerationService(
+      storage,
+      { image: credential, video: credential, tts: credential, stt: credential },
+      { getModels: vi.fn(async () => [model]) } as unknown as OpenRouterCatalogService,
+      { claim: vi.fn(async () => []) } as unknown as ReferenceImageService,
+      {} as AudioInputService,
+      {} as MediaAssetService,
+      {
+        submitVideo: vi.fn(async () => {
+          throw new Error('Internal Server Error (HTTP 500)')
+        }),
+      } as unknown as OpenRouterMediaService,
+      { onUpdated: vi.fn(), onError: vi.fn() },
+      { error: vi.fn(), warn: vi.fn() } as unknown as LoggerService,
+      1,
+    )
+
+    const submitted = await service.generate({
+      kind: 'video',
+      prompt: 'A lake',
+      modelId: model.id,
+      options: { duration: 4, size: '1280x720' },
+      references: [],
+      sessionId: initial.id,
+    })
+
+    await vi.waitFor(async () => {
+      const item = (await storage.getSession(submitted.id)).item
+      expect(item?.status).toBe('failed')
+      expect(item?.error).toContain('temporarily unavailable (HTTP 500)')
+    })
+  })
+
   it('persists generated TTS audio as a playable session asset', async () => {
     root = await mkdtemp(join(tmpdir(), 'aimedia-tts-generation-'))
     const storage = new StorageService(root)
@@ -214,6 +275,7 @@ describe('GenerationService', () => {
       supportsAudio: false,
       supportedVoices: ['alloy'],
       supportsCustomVoice: false,
+      supportedResponseFormats: ['mp3'],
     }
     const credential = {
       getApiKey: vi.fn(async () => 'secret-key'),
@@ -280,6 +342,7 @@ describe('GenerationService', () => {
       supportsAudio: false,
       supportedVoices: [],
       supportsCustomVoice: false,
+      supportedResponseFormats: [],
     }
     const credential = {
       getApiKey: vi.fn(async () => 'secret-key'),
@@ -325,6 +388,175 @@ describe('GenerationService', () => {
         resultText: 'Meeting notes',
         costUsd: 0.01,
       })
+    })
+  })
+
+  it('rejects image generation when the model requires reference images', async () => {
+    root = await mkdtemp(join(tmpdir(), 'aimedia-image-references-'))
+    const storage = new StorageService(root)
+    await storage.initialize()
+    const initial = await storage.createSession()
+    const model: MediaModel = {
+      id: 'vendor/edit-image',
+      name: 'Edit Image',
+      description: '',
+      kind: 'image',
+      capabilities: { input_references: { type: 'range', min: 1, max: 8 } },
+      prices: [],
+      supportsStreaming: false,
+      supportedResolutions: [],
+      supportedAspectRatios: [],
+      supportedSizes: [],
+      supportedDurations: [],
+      supportedFrameImages: [],
+      supportsAudio: false,
+      supportedVoices: [],
+      supportsCustomVoice: false,
+      supportedResponseFormats: [],
+    }
+    const credential = {
+      getApiKey: vi.fn(async () => 'secret-key'),
+    } as unknown as CredentialService
+    const service = new GenerationService(
+      storage,
+      { image: credential, video: credential, tts: credential, stt: credential },
+      { getModels: vi.fn(async () => [model]) } as unknown as OpenRouterCatalogService,
+      {} as ReferenceImageService,
+      {} as AudioInputService,
+      {} as MediaAssetService,
+      {} as OpenRouterMediaService,
+      { onUpdated: vi.fn(), onError: vi.fn() },
+      { error: vi.fn(), warn: vi.fn() } as unknown as LoggerService,
+      1,
+    )
+
+    await expect(
+      service.generate({
+        kind: 'image',
+        prompt: 'Edit this',
+        modelId: model.id,
+        options: {},
+        references: [],
+        sessionId: initial.id,
+      }),
+    ).rejects.toThrow('at least 1 reference images')
+  })
+
+  it('rejects unsupported video frame roles before submission', async () => {
+    root = await mkdtemp(join(tmpdir(), 'aimedia-video-frame-roles-'))
+    const storage = new StorageService(root)
+    await storage.initialize()
+    const initial = await storage.createSession()
+    const model: MediaModel = {
+      id: 'vendor/video',
+      name: 'Video',
+      description: '',
+      kind: 'video',
+      capabilities: {},
+      prices: [],
+      supportsStreaming: false,
+      supportedResolutions: [],
+      supportedAspectRatios: [],
+      supportedSizes: [],
+      supportedDurations: [],
+      supportedFrameImages: ['first_frame'],
+      supportsAudio: false,
+      supportedVoices: [],
+      supportsCustomVoice: false,
+      supportedResponseFormats: [],
+    }
+    const credential = {
+      getApiKey: vi.fn(async () => 'secret-key'),
+    } as unknown as CredentialService
+    const service = new GenerationService(
+      storage,
+      { image: credential, video: credential, tts: credential, stt: credential },
+      { getModels: vi.fn(async () => [model]) } as unknown as OpenRouterCatalogService,
+      {} as ReferenceImageService,
+      {} as AudioInputService,
+      {} as MediaAssetService,
+      {} as OpenRouterMediaService,
+      { onUpdated: vi.fn(), onError: vi.fn() },
+      { error: vi.fn(), warn: vi.fn() } as unknown as LoggerService,
+      1,
+    )
+
+    await expect(
+      service.generate({
+        kind: 'video',
+        prompt: 'A lake',
+        modelId: model.id,
+        options: {},
+        references: [{ token: randomUUID(), role: 'last_frame' }],
+        sessionId: initial.id,
+      }),
+    ).rejects.toThrow('does not support the selected frame image role')
+  })
+
+  it('falls back to a supported TTS format and clamps advertised speed', async () => {
+    root = await mkdtemp(join(tmpdir(), 'aimedia-tts-options-'))
+    const storage = new StorageService(root)
+    await storage.initialize()
+    const initial = await storage.createSession()
+    const model: MediaModel = {
+      id: 'vendor/tts',
+      name: 'TTS',
+      description: '',
+      kind: 'tts',
+      capabilities: { speed: { type: 'range', min: 0.5, max: 2 } },
+      prices: [],
+      supportsStreaming: false,
+      supportedResolutions: [],
+      supportedAspectRatios: [],
+      supportedSizes: [],
+      supportedDurations: [],
+      supportedFrameImages: [],
+      supportsAudio: false,
+      supportedVoices: ['alloy'],
+      supportsCustomVoice: false,
+      supportedResponseFormats: ['pcm'],
+    }
+    const credential = {
+      getApiKey: vi.fn(async () => 'secret-key'),
+    } as unknown as CredentialService
+    const service = new GenerationService(
+      storage,
+      { image: credential, video: credential, tts: credential, stt: credential },
+      { getModels: vi.fn(async () => [model]) } as unknown as OpenRouterCatalogService,
+      {} as ReferenceImageService,
+      {} as AudioInputService,
+      {
+        saveAudio: vi.fn(async () => ({
+          id: randomUUID(),
+          fileName: 'speech.wav',
+          mediaType: 'audio/wav',
+          size: 3,
+          url: 'aimedia://asset/speech',
+        })),
+      } as unknown as MediaAssetService,
+      {
+        generateSpeech: vi.fn(async () => ({
+          bytes: new Uint8Array([1, 2, 3]),
+          mediaType: 'audio/wav',
+        })),
+      } as unknown as OpenRouterMediaService,
+      { onUpdated: vi.fn(), onError: vi.fn() },
+      { error: vi.fn(), warn: vi.fn() } as unknown as LoggerService,
+      1,
+    )
+
+    const submitted = await service.generate({
+      kind: 'tts',
+      prompt: 'Hello',
+      modelId: model.id,
+      options: { voice: 'missing', responseFormat: 'mp3', speed: 9 },
+      sessionId: initial.id,
+    })
+
+    expect(submitted.item?.options).toEqual({
+      voice: 'alloy',
+      responseFormat: 'pcm',
+      speed: 2,
     })
   })
 })

@@ -281,6 +281,13 @@ export interface MediaAsset {
   url: string
 }
 
+/** Describes the sample layout of raw PCM audio reported by a speech provider. */
+export interface PcmAudioFormat {
+  sampleRate: number
+  channels: number
+  bitsPerSample: number
+}
+
 /** Stores the exact image request settings used by a generation. */
 export interface ImageGenerationOptions {
   resolution?: string
@@ -305,9 +312,9 @@ export interface VideoGenerationOptions {
 
 /** Stores the exact text-to-speech request settings used by a generation. */
 export interface TtsGenerationOptions {
-  voice: string
+  voice?: string
   responseFormat: TtsOutputFormat
-  speed: number
+  speed?: number
 }
 
 /** Stores the exact speech-to-text request settings used by a generation. */

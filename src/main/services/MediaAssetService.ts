@@ -5,9 +5,62 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { MediaAsset } from '@shared/types'
+import type { MediaAsset, PcmAudioFormat } from '@shared/types'
 import { httpFetch } from '../http/http.fetch'
 import type StorageService from './StorageService'
+
+const PCM_SAMPLE_RATE = 24_000
+const PCM_CHANNELS = 1
+const PCM_BITS_PER_SAMPLE = 16
+const PCM_BIT_DEPTHS = [8, 16, 24, 32]
+
+/** Applies safe WAV defaults when a provider omits or misreports PCM parameters. */
+const normalizePcmFormat = (format?: PcmAudioFormat): PcmAudioFormat => ({
+  sampleRate:
+    format?.sampleRate && Number.isInteger(format.sampleRate) && format.sampleRate > 0
+      ? format.sampleRate
+      : PCM_SAMPLE_RATE,
+  channels:
+    format?.channels &&
+    Number.isInteger(format.channels) &&
+    format.channels > 0 &&
+    format.channels <= 8
+      ? format.channels
+      : PCM_CHANNELS,
+  bitsPerSample:
+    format?.bitsPerSample && PCM_BIT_DEPTHS.includes(format.bitsPerSample)
+      ? format.bitsPerSample
+      : PCM_BITS_PER_SAMPLE,
+})
+
+/** Wraps raw PCM in a playable RIFF/WAVE container using the provider's sample layout. */
+const wrapPcmAsWav = (bytes: Uint8Array, format?: PcmAudioFormat): Uint8Array => {
+  const { sampleRate, channels, bitsPerSample } = normalizePcmFormat(format)
+  const blockAlign = channels * (bitsPerSample / 8)
+  const dataLength = bytes.byteLength - (bytes.byteLength % blockAlign)
+  const buffer = new ArrayBuffer(44 + dataLength)
+  const view = new DataView(buffer)
+  const writeText = (offset: number, text: string): void => {
+    for (let index = 0; index < text.length; index += 1) {
+      view.setUint8(offset + index, text.charCodeAt(index))
+    }
+  }
+  writeText(0, 'RIFF')
+  view.setUint32(4, 36 + dataLength, true)
+  writeText(8, 'WAVE')
+  writeText(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, channels, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * blockAlign, true)
+  view.setUint16(32, blockAlign, true)
+  view.setUint16(34, bitsPerSample, true)
+  writeText(36, 'data')
+  view.setUint32(40, dataLength, true)
+  new Uint8Array(buffer).set(bytes.subarray(0, dataLength), 44)
+  return new Uint8Array(buffer)
+}
 
 const MIME_EXTENSIONS: Record<string, string> = {
   'image/png': '.png',
@@ -45,8 +98,12 @@ export default class MediaAssetService {
     sessionId: string,
     bytes: Uint8Array,
     mediaType: string,
+    pcm?: PcmAudioFormat,
   ): Promise<MediaAsset> {
     if (bytes.byteLength === 0) throw new Error('OpenRouter returned empty speech audio.')
+    if (mediaType.toLocaleLowerCase('en-US') === 'audio/pcm') {
+      return this.saveBytes(sessionId, wrapPcmAsWav(bytes, pcm), 'audio/wav', 'speech')
+    }
     return this.saveBytes(sessionId, bytes, mediaType, 'speech')
   }
 
@@ -64,7 +121,11 @@ export default class MediaAssetService {
       signal: AbortSignal.timeout(10 * 60 * 1_000),
     })
     if (!response.ok) throw new Error(`Video download failed with HTTP ${response.status}.`)
-    const mediaType = response.headers.get('content-type')?.split(';')[0] ?? 'video/mp4'
+    const declaredMediaType = response.headers.get('content-type')?.split(';')[0]?.trim()
+    const mediaType =
+      declaredMediaType?.toLocaleLowerCase('en-US').startsWith('video/') === true
+        ? declaredMediaType
+        : 'video/mp4'
     return this.saveBytes(
       sessionId,
       Buffer.from(await response.arrayBuffer()),
